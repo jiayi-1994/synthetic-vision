@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Synthetic Vision - Profile &amp; Gallery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary": "#d2bbff",
+                      "surface-container-lowest": "#060e20",
+                      "on-primary-fixed": "#25005a",
+                      "on-background": "#dae2fd",
+                      "primary-fixed-dim": "#d2bbff",
+                      "inverse-on-surface": "#283044",
+                      "inverse-primary": "#732ee4",
+                      "on-secondary-fixed": "#001e2f",
+                      "surface-container-low": "#131b2e",
+                      "surface-container-high": "#222a3d",
+                      "tertiary-container": "#a15100",
+                      "secondary-fixed-dim": "#89ceff",
+                      "secondary": "#89ceff",
+                      "on-tertiary-fixed-variant": "#713700",
+                      "on-error-container": "#ffdad6",
+                      "secondary-fixed": "#c9e6ff",
+                      "on-secondary-container": "#00344e",
+                      "on-tertiary-fixed": "#301400",
+                      "outline-variant": "#4a4455",
+                      "on-error": "#690005",
+                      "surface-bright": "#31394d",
+                      "on-tertiary": "#4f2500",
+                      "surface-variant": "#2d3449",
+                      "on-surface": "#dae2fd",
+                      "primary-container": "#7c3aed",
+                      "on-secondary": "#00344d",
+                      "surface-container": "#171f33",
+                      "on-tertiary-container": "#ffe0cd",
+                      "surface": "#0b1326",
+                      "background": "#0b1326",
+                      "on-primary-container": "#ede0ff",
+                      "surface-dim": "#0b1326",
+                      "on-surface-variant": "#ccc3d8",
+                      "on-primary": "#3f008e",
+                      "outline": "#958da1",
+                      "tertiary": "#ffb784",
+                      "error-container": "#93000a",
+                      "primary-fixed": "#eaddff",
+                      "tertiary-fixed-dim": "#ffb784",
+                      "secondary-container": "#00a2e6",
+                      "on-primary-fixed-variant": "#5a00c6",
+                      "on-secondary-fixed-variant": "#004c6e",
+                      "surface-tint": "#d2bbff",
+                      "surface-container-highest": "#2d3449",
+                      "error": "#ffb4ab",
+                      "tertiary-fixed": "#ffdcc6",
+                      "inverse-surface": "#dae2fd"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-lg": "40px",
+                      "unit": "4px",
+                      "gutter": "24px",
+                      "margin-sm": "16px",
+                      "container-max": "1440px"
+              },
+              "fontFamily": {
+                      "display-lg": ["Inter"],
+                      "body-md": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "label-sm": ["JetBrains Mono"],
+                      "headline-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                      "body-md": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                      "headline-lg-mobile": ["24px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                      "label-sm": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                      "headline-lg": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background-color: rgba(30, 41, 59, 0.6); /* Approximate surface-container-high/60 */
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(51, 65, 85, 0.5); /* lighter slate border */
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .glow-hover:hover {
+            box-shadow: 0 8px 32px rgba(124, 58, 237, 0.15); /* Primary color glow */
+            border-color: rgba(210, 187, 255, 0.3); /* subtle primary rim */
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased overflow-x-hidden min-h-screen flex">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-sm md:px-margin-lg h-16 bg-surface-container/60 backdrop-blur-xl border-b border-outline-variant/20 shadow-sm shadow-primary/5">
+<div class="flex items-center gap-4">
+<!-- Brand Logo mapped from JSON -->
+<span class="text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-primary tracking-tight hidden md:block">Synthetic Vision</span>
+</div>
+<div class="flex items-center gap-6">
+<!-- Search Bar (on_right as per JSON) -->
+<div class="relative hidden lg:flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-on-surface-variant text-sm">search</span>
+<input class="bg-surface-container-high border border-outline-variant/30 rounded-full py-1.5 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 text-on-surface placeholder:text-on-surface-variant transition-all w-64" placeholder="Search gallery..." type="text"/>
+</div>
+<!-- Trailing Secondary Action -->
+<div class="hidden sm:flex items-center bg-surface-variant/40 rounded-full px-3 py-1 border border-outline-variant/20">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse mr-2"></span>
+<span class="font-label-sm text-label-sm text-secondary">1,250 Credits</span>
+</div>
+<!-- Trailing Primary Action -->
+<button class="bg-primary text-on-primary-fixed hover:bg-primary-fixed hover:shadow-[0_0_15px_rgba(210,187,255,0.4)] transition-all duration-200 rounded-lg px-4 py-1.5 font-bold text-sm">
+                Generate
+            </button>
+<!-- Trailing Icon Actions -->
+<div class="flex items-center gap-2 text-on-surface-variant">
+<button class="p-1.5 hover:text-primary hover:bg-surface-variant/30 rounded-full transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-1.5 hover:text-primary hover:bg-surface-variant/30 rounded-full transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<!-- Profile Avatar -->
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-outline-variant/30 object-cover cursor-pointer hover:border-primary transition-colors" data-alt="A futuristic, high-resolution digital portrait of a user avatar in a cyberpunk style. The character has glowing synthetic enhancements and is set against a dark, neon-lit background. Lighting is dramatic, with deep purple and cyan hues emphasizing the modern, AI-generated aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuChlKcuZ4pESyK7LOMviepx6fSpJIq9satrN9vSZK2shgQCVnn1wkKYHQ1I-6fy0ykZtYYkDyBucGzhCKWIo6PEpNVJmkJkrYPG1F5iguGoXOB3fPPyegUBcLL04DflganWmtYGFECxd0TCvvisb0p4VHM96pcRQqxbS33R6IILhNsjRAXePRGgup52XF34taaW5HI_ZscSDfiDnW3WbTTSuxC_rNMLsvI9o8Sb6TTtZmYYZc7yvWfoBgyggIhEx5fBr8WK4HxkAWRi"/>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-4rem)] w-72 flex-col p-margin-sm gap-4 bg-surface-container-low/60 backdrop-blur-xl border-r border-outline-variant/20 hidden md:flex z-40">
+<div class="mb-6 px-3 pt-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-[0_0_20px_rgba(124,58,237,0.3)]">
+<span class="material-symbols-outlined text-on-primary-fixed" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<div>
+<h2 class="font-bold text-on-surface text-sm leading-tight">Synthetic Vision</h2>
+<p class="font-label-sm text-label-sm text-on-surface-variant">V3.5 Engine</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-variant/30 rounded-xl hover:bg-surface-variant/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span>Dashboard</span>
+</a>
+<!-- Active State: Gallery -->
+<a class="flex items-center gap-3 px-3 py-2.5 bg-primary-container text-on-primary-container font-bold rounded-xl active:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span>Gallery</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-variant/30 rounded-xl hover:bg-surface-variant/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">storefront</span>
+<span>Marketplace</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-variant/30 rounded-xl hover:bg-surface-variant/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span>
+<span>Admin</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-variant/30 rounded-xl hover:bg-surface-variant/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span>Analytics</span>
+</a>
+</nav>
+<div class="mt-auto flex flex-col gap-1 border-t border-outline-variant/20 pt-4">
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-variant/30 rounded-xl hover:bg-surface-variant/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span>Support</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-variant/30 rounded-xl hover:bg-surface-variant/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+<button class="mt-4 w-full bg-surface-variant text-on-surface border border-outline-variant/40 hover:border-primary/50 hover:bg-surface-bright transition-all rounded-lg py-2 font-medium text-sm flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">bolt</span> Upgrade Plan
+            </button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-0 md:ml-72 mt-16 p-margin-sm md:p-margin-lg min-h-[calc(100vh-4rem)] relative">
+<!-- Ambient Background Glow -->
+<div class="absolute top-0 left-1/4 w-1/2 h-64 bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+<div class="max-w-container-max mx-auto space-y-gutter">
+<!-- Profile Header -->
+<section class="glass-panel rounded-xl p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+<div class="flex items-center gap-6">
+<div class="relative">
+<img alt="User Avatar Large" class="w-20 h-20 md:w-24 md:h-24 rounded-full border-2 border-primary/30 object-cover shadow-[0_0_20px_rgba(124,58,237,0.2)]" data-alt="A highly detailed, cinematic portrait of a cybernetic human face, acting as an avatar. The subject is lit by stark, high-contrast neon lights in electric purple and cyan against an abyss-like dark background. The rendering style mimics a 3D octane render with subsurface scattering and hyper-realistic textures." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2oHDnoAYZAOw6jqoaMb87RIe4enUxMKKb9IjDyYqsjvy8I25xTTMop4BR3dMwWtefiiELwKmBW94upku0mlnAKBOWain0rw2nWyV5uXWOSKIE8qRc5_xoQkrKmxs3zmj0Wz9OtN8W17JilWBXRrehg9itdnPsB4kUlOzYDKVR0OjYcx3f4WMQHpxLR4YPQ2e0WnxK2ksucPkotAvRUywr-U2WFasl39BanKoA-oCA2CDMZgfz0Q7EzZEk5nbAUjaavkqFuuJpQi4I"/>
+<div class="absolute bottom-0 right-0 w-6 h-6 bg-surface-container rounded-full flex items-center justify-center border border-outline-variant">
+<span class="w-3 h-3 bg-secondary rounded-full"></span>
+</div>
+</div>
+<div>
+<h1 class="font-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-on-surface mb-1">Creator_Alpha</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">verified</span> Pro Member
+                        </p>
+</div>
+</div>
+<div class="flex gap-4 md:gap-8 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
+<div class="bg-surface-container-highest/50 px-5 py-3 rounded-lg border border-outline-variant/20 flex-shrink-0">
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-1 uppercase tracking-wider">Total Generations</p>
+<p class="font-display-lg text-display-lg text-primary leading-none text-2xl md:text-[32px]">4,092</p>
+</div>
+<div class="bg-surface-container-highest/50 px-5 py-3 rounded-lg border border-outline-variant/20 flex-shrink-0">
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-1 uppercase tracking-wider">Credit Balance</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[20px]">toll</span>
+<p class="font-display-lg text-display-lg text-on-surface leading-none text-2xl md:text-[32px]">1,250</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Gallery Grid -->
+<section>
+<div class="flex items-center justify-between mb-6">
+<h2 class="font-bold text-xl text-on-surface">Recent Output</h2>
+<div class="flex gap-2">
+<button class="bg-surface-container hover:bg-surface-variant text-on-surface px-3 py-1.5 rounded-lg border border-outline-variant/30 font-label-sm text-label-sm flex items-center gap-2 transition-colors">
+<span class="material-symbols-outlined text-[16px]">filter_list</span> Filter
+                        </button>
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+<!-- Image Card 1 -->
+<div class="group relative aspect-[4/5] rounded-xl overflow-hidden glass-panel glow-hover transition-all duration-300">
+<img alt="Generated Image 1" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="An abstract digital landscape depicting a surreal, glowing canyon composed of translucent geometric polygons. The scene is illuminated by an ethereal, artificial light source emanating from deep within the structure. The color palette is strictly high-tech: deep charcoal blacks, pristine whites, and electric purple highlights. The mood is solitary, visionary, and computationally complex." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJq-MiU_2GiZ7zGVYIgXDSuez0UPUA-9rrUhCl-ZuNbGKfMUHgYkHXlhuxueyastNgXqXoUFuEYxyHP1yIlr5D7EY7CFUVc0l7i2ZfcOgQohlNEXUo8kRSVz9Kj2xaIkX289H9v35ja4RFUM0KBYC9Ve1aYPNoZaN4-8U33zJLOmy7QdBwbqme1519OUkATpd5taN1bkfnRkX6PzZ0MkZynKj2skimSbs6oHK2F-rurnxz8d_YVWmfD4GSkMFxuA3e3-9HXXD2YRPI"/>
+<!-- Hover Overlay -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest/90 via-surface/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+<div class="translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+<p class="font-label-sm text-label-sm text-primary mb-1">1024x1280 • 2 hrs ago</p>
+<p class="text-sm text-on-surface line-clamp-2 mb-4 leading-snug">"A surreal, glowing canyon composed of translucent geometric polygons, illuminated by ethereal artificial light..."</p>
+<div class="flex items-center gap-2">
+<button class="flex-1 bg-surface-variant/80 hover:bg-primary-container text-on-surface hover:text-on-primary-container py-2 rounded-lg backdrop-blur-sm border border-outline-variant/30 flex justify-center items-center gap-2 transition-colors text-sm font-medium">
+<span class="material-symbols-outlined text-[18px]">download</span> Download
+                                    </button>
+<button class="w-10 h-10 bg-surface-variant/80 hover:bg-error-container text-on-surface hover:text-on-error-container rounded-lg backdrop-blur-sm border border-outline-variant/30 flex justify-center items-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Image Card 2 -->
+<div class="group relative aspect-[4/5] rounded-xl overflow-hidden glass-panel glow-hover transition-all duration-300">
+<img alt="Generated Image 2" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A futuristic server room bathed in volumetric blue and magenta light. Countless glowing optical cables connect to sleek, monolith-like quantum computers. The floor is highly reflective black glass, mirroring the complex machinery above. The aesthetic conveys immense computational power and a sterile, high-tech environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAf7UwOwC-U6oxingWJ_UZgcA-YQjdM6zFfLi7ZLHXi0z8Lrm_5Z23VRDhnf015bIyJINGNNsY-zY51rlKdJnU4HA6ee44Qvd8IL3WbO3hq2L-Z-05E8nl_f9QNPd_WWdAdniWz_WWVZitRITt8VUy_mpeTtE977gNe7GPrQLU2VmUgBUCCyHghG1yFikVkfAbpo4lbYv6fEPnYGmAk3pBvUpSuQL3RP7r3mfdtGPAYC6IjI0tXgIqjp2Am_4K06-KflIuJJ-uTGO9k"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest/90 via-surface/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+<div class="translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+<p class="font-label-sm text-label-sm text-primary mb-1">1024x1280 • 5 hrs ago</p>
+<p class="text-sm text-on-surface line-clamp-2 mb-4 leading-snug">"Futuristic server room bathed in volumetric blue and magenta light, quantum computers, reflective black floor."</p>
+<div class="flex items-center gap-2">
+<button class="flex-1 bg-surface-variant/80 hover:bg-primary-container text-on-surface hover:text-on-primary-container py-2 rounded-lg backdrop-blur-sm border border-outline-variant/30 flex justify-center items-center gap-2 transition-colors text-sm font-medium">
+<span class="material-symbols-outlined text-[18px]">download</span> Download
+                                    </button>
+<button class="w-10 h-10 bg-surface-variant/80 hover:bg-error-container text-on-surface hover:text-on-error-container rounded-lg backdrop-blur-sm border border-outline-variant/30 flex justify-center items-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Image Card 3 -->
+<div class="group relative aspect-[4/5] rounded-xl overflow-hidden glass-panel glow-hover transition-all duration-300">
+<img alt="Generated Image 3" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A minimalist, ethereal portrait of an android wearing a translucent white visor. The background is a seamless, dark gradient from midnight blue to slate black. Gentle, rim-lighting in soft violet highlights the curves of the synthetic face. The overall mood is calm, advanced, and strictly adheres to a premium dark-mode sci-fi aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBORQpRq0Ef6iXM9jNK8A9pmfd3-LSiaRamJaS1ZoJWFRNpcmGgPKC14q3lryoekt5v50K2GxlNMkjLus8Y_6_eLzVbKo8nvXxKXHuIR-CT9H2yvAmbE5zbR3qha0g6RhFtTKAtwc2iikTHGnSyp3yL22eEICtwT1CHwsV7XD6OBAPTK9Zr472U4XC4BQnQuWmkDLoAN6nsCXWbLUZMUrVKpWpQYrtt2yL_Ow_EBbl2Mx7klHDbjkKnwXSx4NHRGLXcyZdfOEZTQxgQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest/90 via-surface/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+<div class="translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+<p class="font-label-sm text-label-sm text-primary mb-1">1024x1280 • 1 day ago</p>
+<p class="text-sm text-on-surface line-clamp-2 mb-4 leading-snug">"Minimalist ethereal portrait of an android wearing a translucent white visor, soft violet rim lighting, dark gradient background."</p>
+<div class="flex items-center gap-2">
+<button class="flex-1 bg-surface-variant/80 hover:bg-primary-container text-on-surface hover:text-on-primary-container py-2 rounded-lg backdrop-blur-sm border border-outline-variant/30 flex justify-center items-center gap-2 transition-colors text-sm font-medium">
+<span class="material-symbols-outlined text-[18px]">download</span> Download
+                                    </button>
+<button class="w-10 h-10 bg-surface-variant/80 hover:bg-error-container text-on-surface hover:text-on-error-container rounded-lg backdrop-blur-sm border border-outline-variant/30 flex justify-center items-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Image Card 4 -->
+<div class="group relative aspect-[4/5] rounded-xl overflow-hidden glass-panel glow-hover transition-all duration-300">
+<img alt="Generated Image 4" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A close-up, macro shot of a complex biomechanical ocular sensor. The 'eye' features a glowing purple iris made of intricate, overlapping metal shutters. The surrounding casing is matte black slate with tiny, glowing cyan indicators. The depth of field is shallow, creating a bokeh effect in the dark background, emphasizing precise, high-tech engineering." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwnUw3NV8i8ChKgg1jBv6v-Th75Had3eyF4QNuOQN8r_PB7w6r-fqxY0HYvderaFrqAgxtj8FagN-QEDfwA5fpvKNSMDKdQonDzhPb7Hi0Ik-c6xv8YSTZm44kd9mmrBEw1a-42owLaasPNIfg_w2zVuP8Z3OgE1o7nVr2g_abPKON3ssB71qzUDAHJxKl-nuYsGrZHlNtkUixN3nsA9ZeVmJ6MpVf0KBjmYEYiDogMCds-hZJukgZKI4kKwi5ouLiKaBFpqKIHhsb"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest/90 via-surface/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+<div class="translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+<p class="font-label-sm text-label-sm text-primary mb-1">1024x1280 • 2 days ago</p>
+<p class="text-sm text-on-surface line-clamp-2 mb-4 leading-snug">"Macro shot of a complex biomechanical ocular sensor, glowing purple iris, matte black casing, shallow depth of field."</p>
+<div class="flex items-center gap-2">
+<button class="flex-1 bg-surface-variant/80 hover:bg-primary-container text-on-surface hover:text-on-primary-container py-2 rounded-lg backdrop-blur-sm border border-outline-variant/30 flex justify-center items-center gap-2 transition-colors text-sm font-medium">
+<span class="material-symbols-outlined text-[18px]">download</span> Download
+                                    </button>
+<button class="w-10 h-10 bg-surface-variant/80 hover:bg-error-container text-on-surface hover:text-on-error-container rounded-lg backdrop-blur-sm border border-outline-variant/30 flex justify-center items-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

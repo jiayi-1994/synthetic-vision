@@ -1,0 +1,20 @@
+# Keep host-native artifacts out of the build context. In particular, a
+# Windows/macOS frontend/node_modules would clobber the linux/musl node_modules
+# installed inside the node:alpine build stage and break `npm run build`.
+node_modules
+frontend/node_modules
+frontend/dist
+backend/web/dist
+
+# Runtime data & secrets — never ship into an image.
+data
+*.db
+*.db-shm
+*.db-wal
+.env
+
+# VCS & local build output
+.git
+.gitignore
+server
+backend/server

@@ -1,0 +1,30 @@
+# Runtime data (SQLite db + generated images)
+data/
+
+# Local environment overrides
+.env
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Built Vite output embedded by go:embed. Ignore the real (hashed) assets to
+# avoid stale-asset drift, but keep the placeholder index.html so the Go backend
+# still compiles before any frontend build. Docker/`make build` regenerate dist.
+backend/web/dist/*
+!backend/web/dist/index.html
+
+# Build output
+/server
+backend/server
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
