@@ -41,8 +41,21 @@ const modes: { id: GenerationMode; label: string; icon: string; helper: string }
 ]
 
 const cost = computed(() => COSTS[resolution.value])
-const sourceName = computed(() => sourceFile.value?.name || '未选择参考图')
 const needsSource = computed(() => mode.value === 'image' || mode.value === 'edit')
+const activeOutputSourceUrl = computed(() => {
+  if (!needsSource.value || sourceFile.value) return ''
+  if (active.value?.status !== 'completed' || !active.value.image_url) return ''
+  return active.value.image_url
+})
+const effectiveSourcePreview = computed(() =>
+  needsSource.value ? sourcePreview.value || activeOutputSourceUrl.value : ''
+)
+const hasSourceForRequest = computed(() => !!sourceFile.value || !!activeOutputSourceUrl.value)
+const sourceName = computed(() => {
+  if (sourceFile.value) return sourceFile.value.name
+  if (activeOutputSourceUrl.value && active.value) return `当前结果 · ${active.value.id.slice(0, 8)}`
+  return '未选择参考图'
+})
 const modeLabel = computed(() => {
   if (mode.value === 'image') return '图生图'
   if (mode.value === 'edit') return '局部修图'
@@ -141,6 +154,7 @@ function pickMode(next: GenerationMode) {
   mode.value = next
   errorMsg.value = ''
   if (next === 'edit') {
+    hasMask.value = false
     nextTick(() => resetMaskCanvas())
   }
 }
@@ -160,8 +174,8 @@ async function generate(e?: MouseEvent) {
     errorMsg.value = '请先描述你的画面再开始合成。'
     return
   }
-  if (needsSource.value && !sourceFile.value) {
-    errorMsg.value = '请先上传一张参考图片。'
+  if (needsSource.value && !hasSourceForRequest.value) {
+    errorMsg.value = '请先上传一张参考图片，或先生成一张图片后再二次修改。'
     return
   }
   let maskImage: Blob | undefined
@@ -176,6 +190,11 @@ async function generate(e?: MouseEvent) {
       return
     }
   }
+  const sourceImage = await sourceImageForRequest()
+  if (needsSource.value && !sourceImage) {
+    errorMsg.value = '当前图片读取失败，请上传一张参考图后重试。'
+    return
+  }
   if (e) clickSpark(e)
   errorMsg.value = ''
   try {
@@ -186,7 +205,7 @@ async function generate(e?: MouseEvent) {
       style: style.value,
       resolution: resolution.value,
       aspect_ratio: aspect.value,
-      source_image: sourceFile.value || undefined,
+      source_image: sourceImage,
       mask_image: maskImage,
     })
   } catch (err: any) {
@@ -196,6 +215,16 @@ async function generate(e?: MouseEvent) {
       errorMsg.value = err?.response?.data?.error || err?.message || '合成失败。'
     }
   }
+}
+
+async function sourceImageForRequest(): Promise<File | undefined> {
+  if (sourceFile.value) return sourceFile.value
+  const url = activeOutputSourceUrl.value
+  if (!url || !active.value) return undefined
+  const response = await fetch(url)
+  if (!response.ok) return undefined
+  const blob = await response.blob()
+  return new File([blob], `${active.value.id}.png`, { type: blob.type || 'image/png' })
 }
 
 function openSourcePicker() {
@@ -576,13 +605,19 @@ function applyPresetFromQuery(rawPresetId: unknown) {
               <span class="font-display text-sm font-bold">{{ modeLabel }}参考图</span>
             </div>
             <p class="font-mono text-[11px] text-on-surface-variant mt-1">
-              {{ sourceFile ? sourceName : '上传 PNG / JPEG / WebP，最大 10MB。' }}
+              {{
+                hasSourceForRequest
+                  ? sourceName
+                  : active && active.status === 'completed'
+                    ? '当前生成结果可直接圈选；也可以上传 PNG / JPEG / WebP。'
+                    : '上传 PNG / JPEG / WebP，最大 10MB；或先生成一张图后再二次修改。'
+              }}
               <span v-if="sourceDims.width"> · {{ sourceDims.width }}×{{ sourceDims.height }}</span>
             </p>
           </div>
           <div class="flex items-center gap-2">
             <button type="button" class="btn-ghost !min-h-9 !py-2 !px-3 text-xs" @click="openSourcePicker">
-              {{ sourceFile ? '更换图片' : '上传图片' }}
+              {{ sourceFile || activeOutputSourceUrl ? '上传新图' : '上传图片' }}
             </button>
             <button
               v-if="sourceFile"
@@ -646,13 +681,48 @@ function applyPresetFromQuery(rawPresetId: unknown) {
           "
         ></div>
 
-        <!-- Completed image -->
-        <img
-          v-if="active && active.status === 'completed' && active.image_url"
-          :src="active.image_url"
-          :alt="active.prompt"
-          class="relative z-10 max-w-full max-h-full object-contain rounded-lg shadow-[0_0_60px_rgba(56,232,255,0.15)]"
-        />
+        <!-- Source preview / mask editor. In image/edit modes this can be either
+             an uploaded reference or the currently completed generation. -->
+        <div
+          v-if="effectiveSourcePreview"
+          class="relative z-10 w-full h-full flex flex-col items-center justify-center p-6 gap-4"
+        >
+          <div
+            class="relative max-w-full max-h-[min(58vh,620px)] rounded-2xl overflow-hidden border border-primary/20 shadow-[0_0_60px_rgba(56,232,255,0.16)]"
+          >
+            <img
+              :src="effectiveSourcePreview"
+              alt="参考图预览"
+              class="block max-w-full max-h-[min(58vh,620px)] object-contain"
+              @load="onSourceImageLoad"
+            />
+            <canvas
+              v-if="mode === 'edit'"
+              ref="maskCanvas"
+              class="absolute inset-0 w-full h-full touch-none cursor-crosshair"
+              @pointerdown="startPainting"
+              @pointermove="continuePainting"
+              @pointerup="stopPainting"
+              @pointerleave="stopPainting"
+            ></canvas>
+          </div>
+          <div class="text-center">
+            <p class="font-display text-lg font-bold text-on-surface">
+              {{ mode === 'edit' ? '涂抹要修图的区域' : '参考图已锁定' }}
+            </p>
+            <p class="font-mono text-[11px] text-on-surface-variant mt-1 uppercase tracking-wider">
+              {{
+                sourceFile
+                  ? mode === 'edit'
+                    ? 'UPLOADED MASK PAINT · ALPHA EXPORT'
+                    : 'UPLOADED REFERENCE · IMAGE-TO-IMAGE'
+                  : mode === 'edit'
+                    ? 'CURRENT RESULT · MASK PAINT'
+                    : 'CURRENT RESULT · REMIX'
+              }}
+            </p>
+          </div>
+        </div>
 
         <!-- Synthesizing state (signature energy moment) -->
         <div
@@ -686,6 +756,14 @@ function applyPresetFromQuery(rawPresetId: unknown) {
           <p class="font-mono text-micro text-primary mt-2">{{ progressPct }}%</p>
         </div>
 
+        <!-- Completed image -->
+        <img
+          v-else-if="active && active.status === 'completed' && active.image_url"
+          :src="active.image_url"
+          :alt="active.prompt"
+          class="relative z-10 max-w-full max-h-full object-contain rounded-lg shadow-[0_0_60px_rgba(56,232,255,0.15)]"
+        />
+
         <!-- Failed state -->
         <div
           v-else-if="active && active.status === 'failed'"
@@ -696,40 +774,6 @@ function applyPresetFromQuery(rawPresetId: unknown) {
           <p class="font-body-md text-body-md text-on-surface-variant max-w-md">
             {{ active.error || '渲染未能完成，积分已退还。' }}
           </p>
-        </div>
-
-        <!-- Source preview / mask editor -->
-        <div
-          v-else-if="sourcePreview"
-          class="relative z-10 w-full h-full flex flex-col items-center justify-center p-6 gap-4"
-        >
-          <div
-            class="relative max-w-full max-h-[min(58vh,620px)] rounded-2xl overflow-hidden border border-primary/20 shadow-[0_0_60px_rgba(56,232,255,0.16)]"
-          >
-            <img
-              :src="sourcePreview"
-              alt="参考图预览"
-              class="block max-w-full max-h-[min(58vh,620px)] object-contain"
-              @load="onSourceImageLoad"
-            />
-            <canvas
-              v-if="mode === 'edit'"
-              ref="maskCanvas"
-              class="absolute inset-0 w-full h-full touch-none cursor-crosshair"
-              @pointerdown="startPainting"
-              @pointermove="continuePainting"
-              @pointerup="stopPainting"
-              @pointerleave="stopPainting"
-            ></canvas>
-          </div>
-          <div class="text-center">
-            <p class="font-display text-lg font-bold text-on-surface">
-              {{ mode === 'edit' ? '涂抹要修图的区域' : '参考图已锁定' }}
-            </p>
-            <p class="font-mono text-[11px] text-on-surface-variant mt-1 uppercase tracking-wider">
-              {{ mode === 'edit' ? 'MASK PAINT · ALPHA EXPORT' : 'REFERENCE REMIX · IMAGE-TO-IMAGE' }}
-            </p>
-          </div>
         </div>
 
         <!-- Idle placeholder -->
