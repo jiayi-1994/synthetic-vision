@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import AuroraCanvas from '@/components/AuroraCanvas.vue'
+import { useMagnet, clickSpark } from '@/composables/useInteractions'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -13,13 +15,16 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 
+const submitBtn = useMagnet(5)
+
 function setMode(m: 'login' | 'register') {
   mode.value = m
   error.value = ''
 }
 
-async function submit() {
+async function submit(e?: MouseEvent) {
   if (loading.value) return
+  if (e) clickSpark(e)
   error.value = ''
   loading.value = true
   try {
@@ -29,10 +34,10 @@ async function submit() {
       await auth.register(username.value, email.value, password.value)
     }
     router.push('/')
-  } catch (e: any) {
+  } catch (err: any) {
     error.value =
-      e?.response?.data?.error ||
-      e?.message ||
+      err?.response?.data?.error ||
+      err?.message ||
       (mode.value === 'login' ? '认证失败。' : '配额申请失败。')
   } finally {
     loading.value = false
@@ -42,186 +47,214 @@ async function submit() {
 
 <template>
   <div
-    class="bg-background text-on-background min-h-screen flex items-center justify-center relative overflow-hidden font-body-md antialiased"
+    class="text-on-background min-h-screen grid lg:grid-cols-2 relative overflow-hidden font-body-md"
   >
-    <!-- Atmospheric Background Layers -->
-    <div class="absolute inset-0 z-0 bg-surface-container-lowest">
-      <!-- Radial neural-net glow base -->
+    <!-- ============ Left: signature aurora hero (signature moment #1 + #2) ============ -->
+    <section class="relative hidden lg:flex flex-col justify-between p-12 xl:p-16 overflow-hidden">
+      <AuroraCanvas :intensity="1.1" />
+      <!-- darken for legibility -->
+      <div class="absolute inset-0 bg-gradient-to-br from-void/30 via-void/50 to-void/80"></div>
       <div
-        class="absolute inset-0 opacity-20 mix-blend-screen"
+        class="absolute inset-0 opacity-[0.5]"
         style="
-          background-image: radial-gradient(circle at 30% 30%, rgba(124, 58, 237, 0.35), transparent 45%),
-            radial-gradient(circle at 70% 70%, rgba(0, 162, 230, 0.25), transparent 50%);
+          background-image: linear-gradient(rgba(56, 232, 255, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(56, 232, 255, 0.05) 1px, transparent 1px);
+          background-size: 40px 40px;
+          -webkit-mask-image: radial-gradient(ellipse 80% 80% at 30% 40%, #000, transparent 75%);
+          mask-image: radial-gradient(ellipse 80% 80% at 30% 40%, #000, transparent 75%);
         "
       ></div>
-      <!-- Subtle Glows -->
-      <div
-        class="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] mix-blend-screen pointer-events-none"
-      ></div>
-      <div
-        class="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-secondary-container/10 rounded-full blur-[100px] mix-blend-screen pointer-events-none"
-      ></div>
-    </div>
 
-    <!-- Main Auth Canvas -->
-    <main class="relative z-10 w-full max-w-md px-margin-sm md:px-0">
-      <!-- Glassmorphism Card -->
-      <div
-        class="bg-surface-container-low/60 backdrop-blur-xl border border-outline-variant/30 rounded-xl shadow-[0_8px_32px_rgba(124,58,237,0.1)] p-8 md:p-10 relative overflow-hidden"
-      >
-        <!-- Top Inner Glow / Rim Light effect -->
-        <div
-          class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"
-        ></div>
+      <div class="relative z-10 flex items-center gap-2 font-mono text-micro text-cyan/80 uppercase">
+        <span class="w-1.5 h-1.5 rounded-full bg-cyan animate-pulse-dot"></span>
+        V3.5 · NEURAL IMAGE ENGINE
+      </div>
 
-        <!-- Header Section -->
-        <div class="flex flex-col items-center mb-8 text-center">
-          <div
-            class="h-12 w-12 rounded-lg bg-surface-variant/50 border border-outline-variant/20 flex items-center justify-center mb-4 shadow-inner relative"
-          >
-            <span class="material-symbols-outlined text-primary text-3xl">auto_awesome</span>
-            <span
-              class="absolute top-1 right-1 w-2 h-2 rounded-full bg-secondary-container animate-pulse"
-            ></span>
-          </div>
-          <h1
-            class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary tracking-tight mb-2"
-          >
-            Synthetic Vision
-          </h1>
-          <p class="font-body-md text-body-md text-on-surface-variant">
-            {{
-              mode === 'login'
-                ? '认证以访问 V3.5 生成引擎。'
-                : '在 V3.5 引擎上申请新的操作员配额。'
-            }}
-          </p>
-        </div>
-
-        <!-- Auth Form -->
-        <form class="space-y-6" @submit.prevent="submit">
-          <!-- Username Field (Register only) -->
-          <div v-if="mode === 'register'" class="space-y-2">
-            <label
-              class="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider"
-              for="username"
-            >
-              操作员代号
-            </label>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span class="material-symbols-outlined text-outline-variant text-sm">badge</span>
-              </div>
-              <input
-                id="username"
-                v-model="username"
-                class="block w-full pl-10 pr-3 py-3 border border-outline-variant/50 rounded-lg leading-5 bg-surface-variant/50 text-on-surface placeholder:text-outline-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200 font-label-sm sm:text-sm"
-                name="username"
-                placeholder="creator_alpha"
-                required
-                type="text"
-              />
-            </div>
-          </div>
-
-          <!-- Email Field -->
-          <div class="space-y-2">
-            <label
-              class="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider"
-              for="email"
-            >
-              邮箱地址
-            </label>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span class="material-symbols-outlined text-outline-variant text-sm">mail</span>
-              </div>
-              <input
-                id="email"
-                v-model="email"
-                class="block w-full pl-10 pr-3 py-3 border border-outline-variant/50 rounded-lg leading-5 bg-surface-variant/50 text-on-surface placeholder:text-outline-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200 font-label-sm sm:text-sm"
-                name="email"
-                placeholder="operator@synthetic.ai"
-                required
-                type="email"
-              />
-            </div>
-          </div>
-
-          <!-- Password Field -->
-          <div class="space-y-2">
-            <div class="flex justify-between items-center">
-              <label
-                class="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider"
-                for="password"
-              >
-                访问密钥
-              </label>
-              <a
-                class="font-label-sm text-label-sm text-primary hover:text-primary-fixed transition-colors"
-                href="#"
-                @click.prevent
-              >
-                忘记密钥？
-              </a>
-            </div>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span class="material-symbols-outlined text-outline-variant text-sm">lock</span>
-              </div>
-              <input
-                id="password"
-                v-model="password"
-                class="block w-full pl-10 pr-3 py-3 border border-outline-variant/50 rounded-lg leading-5 bg-surface-variant/50 text-on-surface placeholder:text-outline-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all duration-200 font-label-sm sm:text-sm"
-                name="password"
-                placeholder="••••••••••••"
-                required
-                type="password"
-              />
-            </div>
-          </div>
-
-          <!-- Error Display -->
-          <div
-            v-if="error"
-            class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-error-container/20 border border-error/30 text-error font-label-sm text-label-sm"
-          >
-            <span class="material-symbols-outlined text-sm">error</span>
-            <span>{{ error }}</span>
-          </div>
-
-          <!-- Actions -->
-          <div class="pt-2 flex flex-col gap-4">
-            <button
-              class="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-on-primary-container bg-primary-container hover:bg-inverse-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:ring-offset-background transition-all duration-200 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-              type="submit"
-              :disabled="loading"
-            >
-              <span
-                v-if="loading"
-                class="material-symbols-outlined text-[18px] animate-spin"
-                >progress_activity</span
-              >
-              {{ mode === 'login' ? '初始化会话' : '申请新配额' }}
-            </button>
-            <button
-              class="w-full flex justify-center py-3 px-4 border border-outline-variant rounded-lg shadow-sm text-sm font-medium text-on-surface bg-surface-container/30 hover:bg-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-outline focus:ring-offset-background transition-all duration-200 active:scale-[0.98]"
-              type="button"
-              @click="setMode(mode === 'login' ? 'register' : 'login')"
-            >
-              {{ mode === 'login' ? '申请新配额' : '初始化会话' }}
-            </button>
-          </div>
-        </form>
-
-        <!-- Decorative Bottom Element -->
-        <div
-          class="mt-8 pt-6 border-t border-outline-variant/20 flex justify-center items-center gap-2 text-outline-variant text-xs font-label-sm"
+      <div class="relative z-10">
+        <!-- Hero mask reveal + flowing gradient -->
+        <h1
+          class="reveal-mask font-display text-[64px] xl:text-[80px] font-bold leading-[0.98] tracking-[-0.03em] mb-6"
         >
-          <span class="material-symbols-outlined text-sm">shield_locked</span>
-          <span>端到端加密链路</span>
+          <span class="block text-on-surface">SYNTHETIC</span>
+          <span class="block text-neon">VISION</span>
+        </h1>
+        <p class="max-w-md text-on-surface-variant text-[17px] leading-relaxed">
+          在黑色虚空里，用青与品红的光，绘制尚未存在的图像。文本到图像的神经合成引擎。
+        </p>
+      </div>
+
+      <div class="relative z-10 flex gap-8 font-mono text-micro uppercase text-on-surface-variant">
+        <div>
+          <div class="text-cyan text-[22px] font-display font-bold tracking-normal">4K</div>
+          ULTRA RES
+        </div>
+        <div>
+          <div class="text-tertiary text-[22px] font-display font-bold tracking-normal">∞</div>
+          STYLES
+        </div>
+        <div>
+          <div class="text-secondary text-[22px] font-display font-bold tracking-normal">1250</div>
+          START CR
         </div>
       </div>
-    </main>
+    </section>
+
+    <!-- ============ Right: auth panel ============ -->
+    <section class="relative flex items-center justify-center p-6 sm:p-10">
+      <!-- mobile aurora peek -->
+      <div class="lg:hidden absolute inset-0 opacity-60"><AuroraCanvas :intensity="0.7" /></div>
+      <div class="lg:hidden absolute inset-0 bg-void/70"></div>
+
+      <main class="relative z-10 w-full max-w-md">
+        <div class="grad-border rounded-[20px]">
+          <div
+            class="glass-panel rounded-[20px] p-8 md:p-10 relative overflow-hidden"
+          >
+            <!-- Header -->
+            <div class="flex flex-col items-center mb-8 text-center">
+              <div
+                class="relative h-14 w-14 rounded-2xl grad-border bg-surface-container flex items-center justify-center mb-5 glow-shadow"
+              >
+                <span class="material-symbols-outlined text-primary text-3xl">auto_awesome</span>
+                <span
+                  class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-secondary animate-pulse-dot"
+                ></span>
+              </div>
+              <h2 class="font-display text-2xl font-bold text-on-surface tracking-tight mb-2">
+                {{ mode === 'login' ? '初始化会话' : '申请新配额' }}
+              </h2>
+              <p class="text-on-surface-variant text-sm leading-relaxed">
+                {{
+                  mode === 'login'
+                    ? '认证以访问 V3.5 生成引擎。'
+                    : '在 V3.5 引擎上申请新的操作员配额。'
+                }}
+              </p>
+            </div>
+
+            <!-- Form -->
+            <form class="space-y-5" @submit.prevent="submit()">
+              <div v-if="mode === 'register'" class="space-y-2">
+                <label
+                  class="font-mono text-micro text-on-surface-variant block uppercase"
+                  for="username"
+                >
+                  操作员代号 · CODENAME
+                </label>
+                <div class="relative">
+                  <span
+                    class="material-symbols-outlined text-outline-variant text-[18px] absolute inset-y-0 left-3 flex items-center"
+                    >badge</span
+                  >
+                  <input
+                    id="username"
+                    v-model="username"
+                    class="field pl-10"
+                    name="username"
+                    placeholder="creator_alpha"
+                    required
+                    type="text"
+                  />
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <label class="font-mono text-micro text-on-surface-variant block uppercase" for="email">
+                  邮箱地址 · EMAIL
+                </label>
+                <div class="relative">
+                  <span
+                    class="material-symbols-outlined text-outline-variant text-[18px] absolute inset-y-0 left-3 flex items-center"
+                    >mail</span
+                  >
+                  <input
+                    id="email"
+                    v-model="email"
+                    class="field pl-10"
+                    name="email"
+                    placeholder="operator@synthetic.ai"
+                    required
+                    type="email"
+                  />
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <label
+                    class="font-mono text-micro text-on-surface-variant block uppercase"
+                    for="password"
+                  >
+                    访问密钥 · ACCESS KEY
+                  </label>
+                  <a
+                    class="font-mono text-micro text-primary hover:text-primary-fixed transition-colors uppercase"
+                    href="#"
+                    @click.prevent
+                  >
+                    忘记密钥？
+                  </a>
+                </div>
+                <div class="relative">
+                  <span
+                    class="material-symbols-outlined text-outline-variant text-[18px] absolute inset-y-0 left-3 flex items-center"
+                    >lock</span
+                  >
+                  <input
+                    id="password"
+                    v-model="password"
+                    class="field pl-10"
+                    name="password"
+                    placeholder="••••••••••••"
+                    required
+                    type="password"
+                  />
+                </div>
+              </div>
+
+              <!-- Error -->
+              <div
+                v-if="error"
+                class="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-error/10 border border-error/30 text-error font-mono text-[12px]"
+              >
+                <span class="material-symbols-outlined text-sm">error</span>
+                <span>{{ error }}</span>
+              </div>
+
+              <!-- Actions -->
+              <div class="pt-1 flex flex-col gap-3">
+                <button
+                  ref="submitBtn"
+                  class="btn-primary w-full flex justify-center items-center gap-2"
+                  type="button"
+                  :disabled="loading"
+                  @click="submit($event)"
+                >
+                  <span v-if="loading" class="material-symbols-outlined text-[18px] animate-spin"
+                    >progress_activity</span
+                  >
+                  <span v-else class="material-symbols-outlined text-[18px]">bolt</span>
+                  {{ mode === 'login' ? '初始化会话' : '申请新配额' }}
+                </button>
+                <button
+                  class="btn-ghost w-full"
+                  type="button"
+                  @click="setMode(mode === 'login' ? 'register' : 'login')"
+                >
+                  {{ mode === 'login' ? '申请新配额' : '初始化会话' }}
+                </button>
+              </div>
+            </form>
+
+            <div
+              class="mt-7 pt-5 border-t border-outline-variant/20 flex justify-center items-center gap-2 text-outline-variant font-mono text-micro uppercase"
+            >
+              <span class="material-symbols-outlined text-sm">shield_locked</span>
+              <span>END-TO-END ENCRYPTED LINK</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </section>
   </div>
 </template>

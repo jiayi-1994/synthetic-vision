@@ -2,42 +2,376 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   Aurora Grid — Cyber Neon. Tokens in :root mirror DESIGN.md §2.
+   ============================================================ */
+:root {
+  --void: #05060f;
+  --bg: #070912;
+  --surface-1: #0b0e1c;
+  --surface-2: #11152a;
+  --surface-3: #171c38;
+  --cyan: #38e8ff;
+  --cyan-rgb: 56 232 255;
+  --cyan-deep: #0bb5d6;
+  --on-cyan: #00131a;
+  --magenta: #ff3df0;
+  --magenta-rgb: 255 61 240;
+  --magenta-deep: #c41fb8;
+  --on-magenta: #1a0019;
+  --violet: #8b5cff;
+  --violet-rgb: 139 92 255;
+  --text-hi: #eaf2ff;
+  --text: #c4cce0;
+  --text-dim: #7e88a6;
+  --text-faint: #4a5270;
+  --surface-glass: 17 22 46;
+  --success: #3dffb0;
+  --warning: #ffce4d;
+  --error: #ff5d6c;
+  --error-rgb: 255 93 108;
+  --line: rgba(120 140 200 / 0.14);
+  --line-strong: rgba(120 140 200 / 0.28);
+
+  --grad-neon: linear-gradient(110deg, #38e8ff 0%, #8b5cff 50%, #ff3df0 100%);
+  --grad-text: linear-gradient(110deg, #9bf6ff 0%, #c7b3ff 45%, #ff8df5 100%);
+  --glow-cyan: 0 0 0 1px rgba(56 232 255 / 0.35), 0 8px 40px rgba(56 232 255 / 0.18);
+  --glow-magenta: 0 0 0 1px rgba(255 61 240 / 0.3), 0 8px 40px rgba(255 61 240 / 0.16);
+
+  /* cursor spotlight position, updated by the global pointer handler (rAF) */
+  --mx: 50%;
+  --my: 50%;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background-color: #020617;
-  color: #dae2fd;
+  background-color: #05060f;
+  color: #c4cce0;
   font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-.glass-panel {
-  background-color: rgba(30, 41, 59, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(51, 65, 85, 0.5);
+/* —— Perspective neon grid floor + ambient aurora wash (pure gradients, $0 cost) —— */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(900px circle at 18% 8%, rgba(56 232 255 / 0.10), transparent 45%),
+    radial-gradient(800px circle at 85% 92%, rgba(255 61 240 / 0.08), transparent 50%),
+    radial-gradient(700px circle at 80% 10%, rgba(139 92 255 / 0.07), transparent 55%),
+    #05060f;
+}
+.grid-floor {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(56 232 255 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56 232 255 / 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 0%, transparent 72%);
+  opacity: 0.7;
 }
 
-.glow-shadow {
-  box-shadow: 0 8px 32px rgba(124, 58, 237, 0.15);
+/* —— Global cursor light follows --mx/--my (only attached on hover devices) —— */
+.cursor-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(320px circle at var(--mx) var(--my), rgba(56 232 255 / 0.07), transparent 60%);
+  transition: background 0.08s linear;
 }
 
-.glow-hover:hover {
-  box-shadow: 0 8px 32px rgba(124, 58, 237, 0.15);
-  border-color: rgba(210, 187, 255, 0.3);
+@layer components {
+  /* Glass panel with cyan rim light (replaces old .glass-panel; same class name) */
+  .glass-panel {
+    background-color: rgba(17 22 46 / 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--line);
+    position: relative;
+  }
+  .glass-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    border-radius: inherit;
+    background: linear-gradient(90deg, transparent, rgba(56 232 255 / 0.5), transparent);
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  /* Primary action: cyan core with neon glow. Used by Login, Dashboard, Analytics,
+     Marketplace, and Admin after the Aurora Grid pass. */
+  .btn-primary {
+    position: relative;
+    isolation: isolate;
+    min-height: 44px;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(var(--cyan-rgb) / 0.6);
+    background: var(--cyan-deep);
+    color: var(--on-cyan);
+    padding: 0.7rem 1.4rem;
+    font-family: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    box-shadow: var(--glow-cyan);
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.25s ease,
+      filter 0.2s ease,
+      border-color 0.2s ease;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.12);
+    border-color: rgba(var(--cyan-rgb) / 0.8);
+    box-shadow: 0 0 0 1px rgba(var(--cyan-rgb) / 0.6), 0 10px 48px rgba(var(--cyan-rgb) / 0.32);
+  }
+  .btn-primary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--void), 0 0 0 4px rgba(var(--cyan-rgb) / 0.85),
+      0 12px 48px rgba(var(--cyan-rgb) / 0.24);
+  }
+  .btn-primary:active {
+    transform: translateY(1px) scale(0.985);
+  }
+  .btn-primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    filter: saturate(0.45) brightness(0.76);
+    box-shadow: none;
+  }
+
+  .btn-ghost {
+    min-height: 44px;
+    border-radius: 0.75rem;
+    border: 1px solid var(--line-strong);
+    background: rgba(var(--surface-glass) / 0.4);
+    color: var(--text-hi);
+    padding: 0.7rem 1.4rem;
+    font-family: 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    font-weight: 600;
+    transition:
+      transform 0.18s ease,
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+  .btn-ghost:hover {
+    border-color: rgba(var(--cyan-rgb) / 0.5);
+    background: rgba(var(--cyan-rgb) / 0.06);
+    color: var(--cyan);
+  }
+  .btn-ghost:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--void), 0 0 0 4px rgba(var(--cyan-rgb) / 0.6);
+  }
+  .btn-ghost:active {
+    transform: scale(0.985);
+  }
+  .btn-ghost:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-1);
+    color: var(--text-hi);
+    padding: 0.75rem 1rem;
+    font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .field::placeholder {
+    color: var(--text-faint);
+  }
+  .field:hover {
+    border-color: rgba(var(--cyan-rgb) / 0.3);
+  }
+  .field:focus {
+    outline: none;
+    border-color: rgba(var(--cyan-rgb) / 0.64);
+    box-shadow: 0 0 0 3px rgba(var(--cyan-rgb) / 0.14);
+  }
+  .field:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .field[aria-invalid='true'] {
+    border-color: rgba(var(--error-rgb) / 0.65);
+    box-shadow: 0 0 0 3px rgba(var(--error-rgb) / 0.14);
+  }
+
+  .glow-shadow {
+    box-shadow: var(--glow-cyan);
+  }
+  .glow-hover {
+    transition: box-shadow 0.25s, border-color 0.25s, transform 0.25s;
+  }
+  .glow-hover:hover {
+    box-shadow: var(--glow-cyan);
+    border-color: rgba(56 232 255 / 0.35);
+  }
+  .glow-magenta {
+    box-shadow: var(--glow-magenta);
+  }
+
+  /* Gradient-border: neon 1px frame via mask trick */
+  .grad-border {
+    position: relative;
+  }
+  .grad-border::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--grad-neon);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  /* SpotlightCard: light blooms under the cursor (--mx/--my set per-card) */
+  .spotlight {
+    position: relative;
+    overflow: hidden;
+  }
+  .spotlight::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s;
+    background: radial-gradient(220px circle at var(--mx) var(--my), rgba(56 232 255 / 0.16), transparent 60%);
+  }
+  .spotlight:hover::before {
+    opacity: 1;
+  }
+
+  /* Flowing gradient text for hero titles */
+  .text-neon {
+    background: var(--grad-text);
+    background-size: 220% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-pan 6s ease infinite;
+  }
+
+  /* Hero mask reveal (clip-path) — apply with .reveal-mask, plays once */
+  .reveal-mask {
+    animation: mask-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes mask-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+/* v-reveal scroll directive */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  filter: blur(6px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.7s ease;
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+/* click-spark particles */
+.spark {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #38e8ff;
+  box-shadow: 0 0 8px rgba(56 232 255 / 0.9);
+  pointer-events: none;
+  z-index: 9999;
+  animation: spark-fly 0.5s ease-out forwards;
+}
+@keyframes spark-fly {
+  to {
+    transform: translate(var(--dx), var(--dy)) scale(0.2);
+    opacity: 0;
+  }
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #4a4455;
-  border-radius: 4px;
+  background: rgba(56 232 255 / 0.18);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #958da1;
+  background: rgba(56 232 255 / 0.4);
+  background-clip: content-box;
 }
 
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+}
+
+::selection {
+  background: rgba(56 232 255 / 0.3);
+  color: #eaf2ff;
+}
+
+/* —— reduced motion: kill all signature motion, keep static neon —— */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  .cursor-glow {
+    display: none;
+  }
 }

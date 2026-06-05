@@ -22,6 +22,14 @@ backend/web/dist/*
 # Build output
 /server
 backend/server
+backend/*.exe
+backend/sv-server.exe
+
+# Runtime logs / agents
+*.log
+backend/srv.log
+backend/srv.err.log
+.nezha/
 
 # Editor / OS noise
 .DS_Store

@@ -2,7 +2,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { AdminAPI } from '@/api/client'
 import { relativeTime } from '@/lib/format'
+import { useMagnet, clickSpark } from '@/composables/useInteractions'
 import type { AdminUser } from '@/types'
+
+const injectBtn = useMagnet(4)
 
 const PAGE_SIZE = 10
 
@@ -96,8 +99,9 @@ function goNext() {
   }
 }
 
-async function inject() {
+async function inject(e?: MouseEvent) {
   if (injecting.value) return
+  if (e) clickSpark(e)
   formError.value = ''
   if (!form.target_public_id.trim()) {
     formError.value = '请输入目标用户 ID。'
@@ -138,9 +142,10 @@ onMounted(() => {
   <main class="flex-1 p-margin-sm md:p-margin-lg overflow-y-auto">
     <div class="max-w-container-max mx-auto space-y-gutter">
       <!-- Page Header -->
-      <div class="mb-8">
-        <h2 class="text-display-lg font-display-lg text-on-surface mb-2 text-[32px] md:text-[48px]">
-          用户目录
+      <div class="mb-8" v-reveal>
+        <p class="font-mono text-micro text-on-surface-variant mb-3 uppercase">控制台 · ADMIN CONSOLE</p>
+        <h2 class="font-display text-[32px] md:text-display-lg font-bold text-on-surface mb-2">
+          用户<span class="text-neon">目录</span>
         </h2>
         <p class="text-on-surface-variant max-w-2xl">
           管理平台访问权限，监控生成活动，并向目标账户注入管理积分。
@@ -151,100 +156,78 @@ onMounted(() => {
       <div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter items-start">
         <!-- Table Section (Spans 8 cols on XL) -->
         <div
-          class="xl:col-span-8 bg-surface-container-low/60 backdrop-blur-xl border border-outline-variant/30 rounded-xl overflow-hidden shadow-sm shadow-primary/5 flex flex-col"
+          v-reveal
+          class="xl:col-span-8 glass-panel rounded-2xl overflow-hidden flex flex-col"
         >
           <div
             class="p-6 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container/50"
           >
-            <h3 class="font-bold text-lg flex items-center gap-2">
+            <h3 class="font-display font-bold text-title flex items-center gap-2 text-on-surface">
               <span class="material-symbols-outlined text-primary text-[20px]">group</span>
               活跃用户
+              <span class="font-mono text-micro text-on-surface-variant uppercase ml-1">DIRECTORY</span>
             </h3>
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="px-3 py-1.5 rounded border border-outline-variant/50 text-on-surface-variant font-label-sm text-label-sm hover:bg-surface-variant/50 transition-colors flex items-center gap-1"
-              >
-                <span class="material-symbols-outlined text-[16px]">filter_list</span> 筛选
-              </button>
-            </div>
+            <button
+              type="button"
+              class="min-h-[40px] px-3 rounded-lg border border-outline-variant/50 text-on-surface-variant font-mono text-[11px] uppercase hover:border-primary/40 hover:text-primary transition-colors flex items-center gap-1.5"
+            >
+              <span class="material-symbols-outlined text-[16px]">filter_list</span> 筛选
+            </button>
           </div>
 
           <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
               <thead>
                 <tr class="bg-surface-container-highest/20 border-b border-outline-variant/20">
-                  <th
-                    class="py-3 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-medium"
-                  >
-                    用户名 / ID
-                  </th>
-                  <th
-                    class="py-3 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-medium"
-                  >
-                    邮箱地址
-                  </th>
-                  <th
-                    class="py-3 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-medium"
-                  >
-                    当前积分
-                  </th>
-                  <th
-                    class="py-3 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-medium"
-                  >
-                    最近活动
-                  </th>
-                  <th
-                    class="py-3 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-medium text-right"
-                  >
-                    操作
-                  </th>
+                  <th class="py-3 px-6 font-mono text-micro text-on-surface-variant uppercase">用户名 / ID</th>
+                  <th class="py-3 px-6 font-mono text-micro text-on-surface-variant uppercase">邮箱地址</th>
+                  <th class="py-3 px-6 font-mono text-micro text-on-surface-variant uppercase">当前积分</th>
+                  <th class="py-3 px-6 font-mono text-micro text-on-surface-variant uppercase">最近活动</th>
+                  <th class="py-3 px-6 font-mono text-micro text-on-surface-variant uppercase text-right">操作</th>
                 </tr>
               </thead>
               <tbody class="font-body-md text-sm divide-y divide-outline-variant/10">
                 <tr
                   v-for="u in users"
                   :key="u.public_id"
-                  class="hover:bg-surface-variant/20 transition-colors group"
+                  class="hover:bg-primary/5 transition-colors group"
                 >
                   <td class="py-4 px-6">
                     <div class="flex items-center gap-3">
                       <div
-                        class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs"
+                        class="w-9 h-9 rounded-xl flex items-center justify-center font-display font-bold text-xs"
                         :class="chipClass(u)"
                       >
                         {{ u.initials }}
                       </div>
                       <div>
                         <div class="font-semibold text-on-surface">{{ u.username }}</div>
-                        <div
-                          class="font-label-sm text-label-sm text-on-surface-variant opacity-60"
-                        >
+                        <div class="font-mono text-[10px] text-on-surface-variant opacity-70">
                           {{ u.public_id }}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td class="py-4 px-6 text-on-surface-variant">{{ u.email }}</td>
+                  <td class="py-4 px-6 text-on-surface-variant font-mono text-[12px]">{{ u.email }}</td>
                   <td class="py-4 px-6">
                     <span
-                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-label-sm text-label-sm"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[12px]"
                       :class="pillClass(u.credits)"
                     >
                       <span
                         v-if="u.credits >= 1000"
-                        class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
+                        class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse-dot"
                       ></span>
                       {{ fmt(u.credits) }}
                     </span>
                   </td>
-                  <td class="py-4 px-6 text-on-surface-variant">
+                  <td class="py-4 px-6 text-on-surface-variant font-mono text-[11px]">
                     {{ relativeTime(u.last_activity_at) }}
                   </td>
                   <td class="py-4 px-6 text-right">
                     <button
                       type="button"
-                      class="px-3 py-1.5 rounded border border-outline-variant hover:border-primary/50 text-primary font-label-sm text-label-sm transition-all duration-200 bg-surface-container/30 hover:bg-surface-variant/50"
+                      class="min-h-[40px] px-3 rounded-lg border border-outline-variant/50 hover:border-primary/50 text-primary font-mono text-[11px] uppercase transition-all bg-surface-container/30 hover:bg-primary/8"
                       @click="prefillRecharge(u)"
                     >
                       充值
@@ -262,13 +245,13 @@ onMounted(() => {
           </div>
 
           <div
-            class="p-4 border-t border-outline-variant/20 bg-surface-container/30 flex justify-between items-center font-label-sm text-label-sm text-on-surface-variant"
+            class="p-4 border-t border-outline-variant/20 bg-surface-container/30 flex justify-between items-center font-mono text-[11px] text-on-surface-variant"
           >
             <span>显示第 {{ rangeStart }}-{{ rangeEnd }} 项，共 {{ fmt(total) }} 个用户</span>
-            <div class="flex gap-2">
+            <div class="flex gap-1">
               <button
                 type="button"
-                class="p-1 rounded hover:bg-surface-variant/50 transition-colors disabled:opacity-50"
+                class="w-11 h-11 rounded-lg flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
                 :disabled="page <= 1"
                 @click="goPrev"
               >
@@ -276,7 +259,7 @@ onMounted(() => {
               </button>
               <button
                 type="button"
-                class="p-1 rounded hover:bg-surface-variant/50 transition-colors disabled:opacity-50"
+                class="w-11 h-11 rounded-lg flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
                 :disabled="page >= totalPages"
                 @click="goNext"
               >
@@ -290,71 +273,50 @@ onMounted(() => {
         <div class="xl:col-span-4 space-y-6">
           <!-- Manual Injection Form -->
           <div
-            class="bg-surface-container-low/60 backdrop-blur-xl border border-outline-variant/30 rounded-xl p-6 shadow-[0_8px_32px_rgba(124,58,237,0.05)] relative overflow-hidden group"
+            v-reveal="80"
+            class="spotlight glass-panel grad-border rounded-2xl p-6 relative overflow-hidden"
           >
-            <div
-              class="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/20 transition-all duration-500"
-            ></div>
-            <h3
-              class="font-bold text-lg flex items-center gap-2 mb-6 text-primary relative z-10"
-            >
-              <span
-                class="material-symbols-outlined text-[20px]"
-                style="font-variation-settings: 'FILL' 1"
-                >bolt</span
-              >
+            <h3 class="font-display font-bold text-title flex items-center gap-2 mb-6 text-primary relative z-10">
+              <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1">bolt</span>
               手动注入积分
             </h3>
-            <form class="space-y-5 relative z-10" @submit.prevent="inject">
+            <form class="space-y-5 relative z-10" @submit.prevent="inject()">
               <div class="space-y-2">
-                <label
-                  class="block font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider"
-                  >目标用户 ID</label
-                >
+                <label class="block font-mono text-micro text-on-surface-variant uppercase">目标用户 ID</label>
                 <div class="relative">
-                  <span
-                    class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm"
-                    >person_search</span
-                  >
+                  <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">person_search</span>
                   <input
                     v-model="form.target_public_id"
-                    class="w-full pl-9 pr-4 py-2.5 bg-surface-container border border-outline-variant/50 rounded-lg font-label-sm text-label-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-outline/50"
+                    class="field pl-10 font-mono text-[13px]"
                     placeholder="例如 USR-9102B"
                     type="text"
                   />
                 </div>
               </div>
               <div class="space-y-2">
-                <label
-                  class="block font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider"
-                  >积分数量</label
-                >
+                <label class="block font-mono text-micro text-on-surface-variant uppercase">积分数量</label>
                 <div class="relative">
-                  <span
-                    class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm"
-                    >database</span
-                  >
+                  <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">database</span>
                   <input
                     v-model.number="form.amount"
-                    class="w-full pl-9 pr-4 py-2.5 bg-surface-container border border-outline-variant/50 rounded-lg font-label-sm text-label-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-outline/50"
+                    class="field pl-10 font-mono text-[13px]"
                     placeholder="0"
                     type="number"
                   />
                 </div>
               </div>
 
-              <p
-                v-if="formError"
-                class="flex items-center gap-2 text-error font-label-sm text-label-sm"
-              >
+              <p v-if="formError" class="flex items-center gap-2 text-error font-mono text-[12px]">
                 <span class="material-symbols-outlined text-sm">error</span>{{ formError }}
               </p>
 
-              <div class="pt-2">
+              <div class="pt-1">
                 <button
-                  class="w-full bg-primary text-on-primary-fixed py-2.5 rounded-lg font-bold hover:brightness-110 active:scale-[0.98] transition-all flex justify-center items-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
-                  type="submit"
+                  ref="injectBtn"
+                  class="btn-primary w-full flex justify-center items-center gap-2"
+                  type="button"
                   :disabled="injecting"
+                  @click="inject($event)"
                 >
                   {{ injecting ? '注入中…' : '确认充值' }}
                   <span
@@ -369,22 +331,25 @@ onMounted(() => {
 
           <!-- Compute Cluster Status -->
           <div
-            class="bg-surface-container border border-outline-variant/20 rounded-xl p-4 flex items-center justify-between"
+            v-reveal="140"
+            class="glass-panel rounded-2xl p-5 flex items-center justify-between"
           >
             <div>
-              <div class="font-label-sm text-label-sm text-on-surface-variant mb-1">
-                计算集群
-              </div>
+              <div class="font-mono text-micro text-on-surface-variant mb-2 uppercase">计算集群 · CLUSTER</div>
               <div class="flex items-center gap-2">
-                <span
-                  class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(137,206,255,0.8)]"
-                ></span>
-                <span class="font-medium text-sm text-on-surface">
-                  {{ cluster ? `${cluster.status}（负载 ${cluster.load_percent}%）` : '连接中…' }}
+                <span class="w-2 h-2 rounded-full bg-success shadow-[0_0_8px_rgba(61,255,176,0.8)]"></span>
+                <span class="font-mono text-[12px] text-on-surface">
+                  {{ cluster ? `${cluster.status} · LOAD ${cluster.load_percent}%` : '连接中…' }}
                 </span>
               </div>
+              <div v-if="cluster" class="w-full h-1.5 bg-surface-variant rounded-full overflow-hidden mt-3">
+                <div
+                  class="h-full rounded-full bg-gradient-to-r from-success via-primary to-secondary transition-all duration-1000"
+                  :style="{ width: `${cluster.load_percent}%` }"
+                ></div>
+              </div>
             </div>
-            <span class="material-symbols-outlined text-outline-variant">memory</span>
+            <span class="material-symbols-outlined text-primary ml-4">memory</span>
           </div>
         </div>
       </div>
@@ -399,8 +364,8 @@ onMounted(() => {
     >
       <div
         v-if="toast"
-        class="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-lg glass-panel shadow-lg max-w-sm"
-        :class="toast.kind === 'success' ? 'text-secondary' : 'text-error'"
+        class="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl glass-panel grad-border max-w-sm"
+        :class="toast.kind === 'success' ? 'text-success' : 'text-error'"
       >
         <span class="material-symbols-outlined text-[18px]">{{
           toast.kind === 'success' ? 'check_circle' : 'error'

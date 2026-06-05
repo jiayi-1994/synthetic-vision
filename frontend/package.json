@@ -12,6 +12,7 @@
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.10",
     "axios": "^1.7.7",
     "material-symbols": "^0.40.2",
     "pinia": "^2.2.4",
