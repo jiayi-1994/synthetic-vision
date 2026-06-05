@@ -165,6 +165,7 @@ onMounted(loadAnalytics)
               v-for="(card, i) in summaryCards"
               :key="card.label"
               v-reveal="i * 60"
+              v-spotlight
               class="spotlight glass-panel glow-hover rounded-2xl p-6"
             >
               <div class="flex items-start justify-between gap-4 relative z-10">

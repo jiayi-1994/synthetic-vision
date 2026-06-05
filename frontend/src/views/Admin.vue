@@ -274,6 +274,7 @@ onMounted(() => {
           <!-- Manual Injection Form -->
           <div
             v-reveal="80"
+            v-spotlight
             class="spotlight glass-panel grad-border rounded-2xl p-6 relative overflow-hidden"
           >
             <h3 class="font-display font-bold text-title flex items-center gap-2 mb-6 text-primary relative z-10">

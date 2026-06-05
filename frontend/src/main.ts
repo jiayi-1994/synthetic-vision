@@ -14,9 +14,11 @@ import 'material-symbols/outlined.css'
 
 import './style.css'
 import { reveal } from './directives/reveal'
+import { spotlight } from './directives/spotlight'
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.directive('reveal', reveal)
+app.directive('spotlight', spotlight)
 app.mount('#app')
