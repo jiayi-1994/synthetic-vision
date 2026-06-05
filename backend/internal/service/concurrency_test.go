@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -155,5 +156,74 @@ func TestDoubleRefundGuard(t *testing.T) {
 	s.db.Where("id = ?", gen.ID).First(&g)
 	if g.Status != "failed" {
 		t.Errorf("expected status failed, got %q", g.Status)
+	}
+}
+
+func TestCreateImageGenerationStoresSourceAsset(t *testing.T) {
+	s := newTestService(t, failingProvider{})
+	uid := seedTestUser(t, s, 20)
+
+	gen, err := s.CreateGeneration(uid, CreateGenInput{
+		Mode:        "image",
+		Prompt:      "remix this frame",
+		Resolution:  "1K",
+		AspectRatio: "1:1",
+		SourceImage: &UploadedImage{
+			Data:      tinyPNG(),
+			MimeType:  "image/png",
+			Extension: ".png",
+			Filename:  "source.png",
+		},
+	})
+	if err != nil {
+		t.Fatalf("create image generation: %v", err)
+	}
+	if gen.Mode != "image" || !gen.HasSourceImage || gen.SourceImagePath == "" {
+		t.Fatalf("source metadata mismatch: %+v", gen)
+	}
+	if _, err := os.Stat(gen.SourceImagePath); err != nil {
+		t.Fatalf("source image should be persisted: %v", err)
+	}
+}
+
+func TestCreateImageGenerationRequiresSource(t *testing.T) {
+	s := newTestService(t, failingProvider{})
+	uid := seedTestUser(t, s, 20)
+
+	_, err := s.CreateGeneration(uid, CreateGenInput{
+		Mode:        "image",
+		Prompt:      "missing source",
+		Resolution:  "1K",
+		AspectRatio: "1:1",
+	})
+	if !errors.Is(err, ErrInvalidParam) {
+		t.Fatalf("expected ErrInvalidParam, got %v", err)
+	}
+}
+
+func TestCreateEditGenerationRequiresMask(t *testing.T) {
+	s := newTestService(t, failingProvider{})
+	uid := seedTestUser(t, s, 20)
+
+	_, err := s.CreateGeneration(uid, CreateGenInput{
+		Mode:        "edit",
+		Prompt:      "replace selected area",
+		Resolution:  "1K",
+		AspectRatio: "1:1",
+		SourceImage: &UploadedImage{
+			Data:      tinyPNG(),
+			MimeType:  "image/png",
+			Extension: ".png",
+		},
+	})
+	if !errors.Is(err, ErrInvalidParam) {
+		t.Fatalf("expected ErrInvalidParam, got %v", err)
+	}
+}
+
+func tinyPNG() []byte {
+	return []byte{
+		0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R',
 	}
 }

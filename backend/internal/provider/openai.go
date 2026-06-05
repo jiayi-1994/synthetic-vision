@@ -8,9 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
+	"net/textproto"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -57,18 +60,27 @@ type openAIResponse struct {
 	} `json:"error"`
 }
 
-// Generate posts to {BaseURL}/v1/images/generations and decodes the result.
+// Generate posts to {BaseURL}/v1/images/generations for text mode or
+// {BaseURL}/v1/images/edits when a source image is present, then decodes the
+// result. It prefers b64_json and falls back to downloading the url field. If
+// the decoded bytes are not PNG, they are stored as-is with a detected MIME
+// type.
+func (o *OpenAIProvider) Generate(ctx context.Context, req GenerateRequest) (*GenerateResult, error) {
+	if req.SourceImage != nil {
+		return o.edit(ctx, req)
+	}
+	return o.generate(ctx, req)
+}
+
+// generate posts to {BaseURL}/v1/images/generations and decodes the result.
 // It prefers b64_json and falls back to downloading the url field. If the
 // decoded bytes are not PNG, they are stored as-is with a detected MIME type.
-func (o *OpenAIProvider) Generate(ctx context.Context, req GenerateRequest) (*GenerateResult, error) {
+func (o *OpenAIProvider) generate(ctx context.Context, req GenerateRequest) (*GenerateResult, error) {
 	if o.baseURL == "" {
 		return nil, errors.New("openai base url not configured")
 	}
 	size := fmt.Sprintf("%dx%d", req.Width, req.Height)
-	prompt := req.Prompt
-	if req.Style != "" {
-		prompt = req.Style + " style: " + prompt
-	}
+	prompt := buildPrompt(req)
 	body := openAIRequest{
 		Model:          o.model,
 		Prompt:         prompt,
@@ -126,6 +138,126 @@ func (o *OpenAIProvider) Generate(ctx context.Context, req GenerateRequest) (*Ge
 		return o.download(ctx, item.URL)
 	}
 	return nil, errors.New("provider returned neither b64_json nor url")
+}
+
+func (o *OpenAIProvider) edit(ctx context.Context, req GenerateRequest) (*GenerateResult, error) {
+	if o.baseURL == "" {
+		return nil, errors.New("openai base url not configured")
+	}
+	if req.SourceImage == nil || len(req.SourceImage.Data) == 0 {
+		return nil, errors.New("source image is required for image edit")
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("model", o.model); err != nil {
+		return nil, err
+	}
+	if err := writer.WriteField("prompt", buildPrompt(req)); err != nil {
+		return nil, err
+	}
+	if req.Width > 0 && req.Height > 0 {
+		if err := writer.WriteField("size", fmt.Sprintf("%dx%d", req.Width, req.Height)); err != nil {
+			return nil, err
+		}
+	}
+	if err := writeMultipartImage(writer, "image[]", req.SourceImage); err != nil {
+		return nil, err
+	}
+	if req.MaskImage != nil && len(req.MaskImage.Data) > 0 {
+		if err := writeMultipartImage(writer, "mask", req.MaskImage); err != nil {
+			return nil, err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	url := o.baseURL + "/v1/images/edits"
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
+	httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
+
+	resp, err := o.client.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		return nil, err
+	}
+
+	var parsed openAIResponse
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("decode response (status %d): %w", resp.StatusCode, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if parsed.Error != nil && parsed.Error.Message != "" {
+			return nil, fmt.Errorf("provider error: %s", parsed.Error.Message)
+		}
+		return nil, fmt.Errorf("provider returned status %d", resp.StatusCode)
+	}
+	if len(parsed.Data) == 0 {
+		return nil, errors.New("provider returned no image data")
+	}
+
+	item := parsed.Data[0]
+	if item.B64JSON != "" {
+		imgBytes, err := base64.StdEncoding.DecodeString(item.B64JSON)
+		if err != nil {
+			return nil, fmt.Errorf("decode b64_json: %w", err)
+		}
+		return &GenerateResult{Image: imgBytes, MimeType: detectMime(imgBytes)}, nil
+	}
+	if item.URL != "" {
+		return o.download(ctx, item.URL)
+	}
+	return nil, errors.New("provider returned neither b64_json nor url")
+}
+
+func buildPrompt(req GenerateRequest) string {
+	prompt := req.Prompt
+	if req.Style != "" {
+		prompt = req.Style + " style: " + prompt
+	}
+	if req.NegativePrompt != "" {
+		prompt += "\nAvoid: " + req.NegativePrompt
+	}
+	return prompt
+}
+
+func writeMultipartImage(writer *multipart.Writer, field string, img *InputImage) error {
+	filename := img.Filename
+	if filename == "" {
+		filename = "image" + extensionForMime(img.MimeType)
+	}
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, field, filepath.Base(filename)))
+	if img.MimeType != "" {
+		header.Set("Content-Type", img.MimeType)
+	}
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		return err
+	}
+	_, err = part.Write(img.Data)
+	return err
+}
+
+func extensionForMime(mime string) string {
+	switch mime {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".png"
+	}
 }
 
 func (o *OpenAIProvider) download(ctx context.Context, rawURL string) (*GenerateResult, error) {

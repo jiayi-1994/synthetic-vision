@@ -21,22 +21,27 @@ type User struct {
 
 // Generation is both the persistence model and the JSON DTO for an image job.
 type Generation struct {
-	ID             string     `gorm:"primaryKey;size:36" json:"id"`
-	UserID         string     `gorm:"index;size:36" json:"-"`
-	Prompt         string     `gorm:"type:text" json:"prompt"`
-	NegativePrompt string     `gorm:"type:text" json:"negative_prompt"`
-	Resolution     string     `gorm:"size:8" json:"resolution"`
-	AspectRatio    string     `gorm:"size:8" json:"aspect_ratio"`
-	Style          string     `gorm:"size:32" json:"style"`
-	Width          int        `json:"width"`
-	Height         int        `json:"height"`
-	Seed           int64      `json:"seed"`
-	Status         string     `gorm:"size:16;index" json:"status"`
-	Cost           int        `json:"cost"`
-	ImageURL       string     `gorm:"size:255" json:"image_url"` // e.g. "/images/<id>.png"
-	Error          string     `gorm:"type:text" json:"error"`
-	CreatedAt      time.Time  `json:"created_at"`
-	CompletedAt    *time.Time `json:"completed_at"`
+	ID              string     `gorm:"primaryKey;size:36" json:"id"`
+	UserID          string     `gorm:"index;size:36" json:"-"`
+	Mode            string     `gorm:"size:16;default:text" json:"mode"`
+	Prompt          string     `gorm:"type:text" json:"prompt"`
+	NegativePrompt  string     `gorm:"type:text" json:"negative_prompt"`
+	Resolution      string     `gorm:"size:8" json:"resolution"`
+	AspectRatio     string     `gorm:"size:8" json:"aspect_ratio"`
+	Style           string     `gorm:"size:32" json:"style"`
+	Width           int        `json:"width"`
+	Height          int        `json:"height"`
+	Seed            int64      `json:"seed"`
+	Status          string     `gorm:"size:16;index" json:"status"`
+	Cost            int        `json:"cost"`
+	ImageURL        string     `gorm:"size:255" json:"image_url"` // e.g. "/images/<id>.png"
+	SourceImagePath string     `gorm:"size:512" json:"-"`
+	MaskImagePath   string     `gorm:"size:512" json:"-"`
+	HasSourceImage  bool       `gorm:"default:false" json:"has_source_image"`
+	HasMaskImage    bool       `gorm:"default:false" json:"has_mask_image"`
+	Error           string     `gorm:"type:text" json:"error"`
+	CreatedAt       time.Time  `json:"created_at"`
+	CompletedAt     *time.Time `json:"completed_at"`
 }
 
 // CreditTransaction is an immutable ledger entry. Amount is positive for a

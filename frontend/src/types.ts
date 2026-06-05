@@ -11,11 +11,13 @@ export interface User {
 }
 
 export type GenStatus = 'pending' | 'processing' | 'completed' | 'failed'
+export type GenerationMode = 'text' | 'image' | 'edit'
 export type Resolution = '1K' | '2K' | '4K'
 export type AspectRatio = '1:1' | '4:3' | '16:9' | '9:16'
 
 export interface Generation {
   id: string
+  mode: GenerationMode
   prompt: string
   negative_prompt: string
   resolution: Resolution
@@ -27,6 +29,8 @@ export interface Generation {
   status: GenStatus
   cost: number
   image_url: string
+  has_source_image: boolean
+  has_mask_image: boolean
   error: string
   created_at: string
   completed_at: string | null
@@ -52,11 +56,14 @@ export interface Stats {
 }
 
 export interface CreateGenInput {
+  mode?: GenerationMode
   prompt: string
   negative_prompt?: string
   style?: string
   resolution: Resolution
   aspect_ratio: AspectRatio
+  source_image?: File
+  mask_image?: Blob | File
 }
 
 export interface AnalyticsDistributionItem {

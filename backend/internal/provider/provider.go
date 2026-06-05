@@ -8,12 +8,22 @@ import (
 
 // GenerateRequest describes a single image to synthesize.
 type GenerateRequest struct {
+	Mode           string
 	Prompt         string
 	NegativePrompt string
 	Style          string
 	Width          int
 	Height         int
 	Seed           int64
+	SourceImage    *InputImage
+	MaskImage      *InputImage
+}
+
+// InputImage carries an uploaded image used as a reference or edit mask.
+type InputImage struct {
+	Data     []byte
+	MimeType string
+	Filename string
 }
 
 // GenerateResult carries the produced image bytes and its MIME type.

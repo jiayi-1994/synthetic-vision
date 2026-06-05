@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useGenerationsStore } from '@/stores/generations'
 import { COSTS, RESOLUTIONS, ASPECTS } from '@/lib/format'
 import { getPresetById } from '@/lib/presets'
 import { useMagnet, clickSpark } from '@/composables/useInteractions'
-import type { Resolution, AspectRatio, Preset } from '@/types'
+import type { Resolution, AspectRatio, GenerationMode, Preset } from '@/types'
 
 const gen = useGenerationsStore()
 const { active } = storeToRefs(gen)
@@ -19,13 +19,46 @@ const aspect = ref<AspectRatio>('1:1')
 const style = ref('Cinematic')
 const errorMsg = ref('')
 const presetHint = ref('')
+const mode = ref<GenerationMode>('text')
+const sourceInput = ref<HTMLInputElement | null>(null)
+const sourceFile = ref<File | null>(null)
+const sourcePreview = ref('')
+const sourceDims = ref({ width: 0, height: 0 })
+const maskCanvas = ref<HTMLCanvasElement | null>(null)
+const brushSize = ref(44)
+const isErasing = ref(false)
+const hasMask = ref(false)
+const isPainting = ref(false)
 
 const route = useRoute()
 const router = useRouter()
 
 const genBtn = useMagnet(5)
+const modes: { id: GenerationMode; label: string; icon: string; helper: string }[] = [
+  { id: 'text', label: '文生图', icon: 'auto_awesome', helper: '从提示词直接生成新画面' },
+  { id: 'image', label: '图生图', icon: 'add_photo_alternate', helper: '上传参考图后重绘风格与细节' },
+  { id: 'edit', label: '局部修图', icon: 'brush', helper: '涂抹区域后进行局部替换或移除' },
+]
 
 const cost = computed(() => COSTS[resolution.value])
+const sourceName = computed(() => sourceFile.value?.name || '未选择参考图')
+const needsSource = computed(() => mode.value === 'image' || mode.value === 'edit')
+const modeLabel = computed(() => {
+  if (mode.value === 'image') return '图生图'
+  if (mode.value === 'edit') return '局部修图'
+  return '文生图'
+})
+const promptPlaceholder = computed(() => {
+  if (mode.value === 'image') return '描述你想如何重绘参考图… 例如：“保留主体构图，改成赛博霓虹摄影棚海报…”'
+  if (mode.value === 'edit') return '描述涂抹区域要如何变化… 例如：“把选区里的旧路灯替换成发光晶体装置…”'
+  return '描述你的画面… 例如：“午夜里一片生物荧光森林，悬浮着晶莹剔透的结晶体…”'
+})
+const submitLabel = computed(() => {
+  if (isBusy.value) return '合成中'
+  if (mode.value === 'image') return '重绘'
+  if (mode.value === 'edit') return '修图'
+  return '生成'
+})
 
 const isBusy = computed(
   () => active.value?.status === 'pending' || active.value?.status === 'processing'
@@ -94,6 +127,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopFakeProgress()
+  revokeSourcePreview()
 })
 
 function pickResolution(r: Resolution) {
@@ -101,6 +135,14 @@ function pickResolution(r: Resolution) {
 }
 function pickAspect(a: AspectRatio) {
   aspect.value = a
+}
+
+function pickMode(next: GenerationMode) {
+  mode.value = next
+  errorMsg.value = ''
+  if (next === 'edit') {
+    nextTick(() => resetMaskCanvas())
+  }
 }
 
 // Approximate ratio box dimensions for the aspect-grid icons
@@ -118,15 +160,34 @@ async function generate(e?: MouseEvent) {
     errorMsg.value = '请先描述你的画面再开始合成。'
     return
   }
+  if (needsSource.value && !sourceFile.value) {
+    errorMsg.value = '请先上传一张参考图片。'
+    return
+  }
+  let maskImage: Blob | undefined
+  if (mode.value === 'edit') {
+    if (!hasMask.value) {
+      errorMsg.value = '请先在参考图上涂抹要修图的区域。'
+      return
+    }
+    maskImage = await exportMaskBlob()
+    if (!maskImage) {
+      errorMsg.value = 'Mask 导出失败，请清除后重新涂抹。'
+      return
+    }
+  }
   if (e) clickSpark(e)
   errorMsg.value = ''
   try {
     await gen.create({
+      mode: mode.value,
       prompt: prompt.value.trim(),
       negative_prompt: negativePrompt.value.trim() || undefined,
       style: style.value,
       resolution: resolution.value,
       aspect_ratio: aspect.value,
+      source_image: sourceFile.value || undefined,
+      mask_image: maskImage,
     })
   } catch (err: any) {
     if (err?.response?.status === 402) {
@@ -135,6 +196,157 @@ async function generate(e?: MouseEvent) {
       errorMsg.value = err?.response?.data?.error || err?.message || '合成失败。'
     }
   }
+}
+
+function openSourcePicker() {
+  sourceInput.value?.click()
+}
+
+function handleSourceSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  setSourceFile(file)
+}
+
+function setSourceFile(file: File) {
+  errorMsg.value = ''
+  const validTypes = ['image/png', 'image/jpeg', 'image/webp']
+  if (!validTypes.includes(file.type)) {
+    errorMsg.value = '参考图仅支持 PNG、JPEG 或 WebP。'
+    return
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    errorMsg.value = '参考图不能超过 10MB。'
+    return
+  }
+  revokeSourcePreview()
+  sourceFile.value = file
+  sourcePreview.value = URL.createObjectURL(file)
+  if (mode.value === 'text') {
+    mode.value = 'image'
+  }
+  hasMask.value = false
+  nextTick(() => resetMaskCanvas())
+}
+
+function removeSource() {
+  revokeSourcePreview()
+  sourceFile.value = null
+  sourceDims.value = { width: 0, height: 0 }
+  clearMask()
+}
+
+function revokeSourcePreview() {
+  if (sourcePreview.value) {
+    URL.revokeObjectURL(sourcePreview.value)
+    sourcePreview.value = ''
+  }
+}
+
+function onSourceImageLoad(event: Event) {
+  const img = event.target as HTMLImageElement
+  sourceDims.value = {
+    width: img.naturalWidth || 0,
+    height: img.naturalHeight || 0,
+  }
+  resetMaskCanvas()
+}
+
+function resetMaskCanvas() {
+  const canvas = maskCanvas.value
+  if (!canvas || sourceDims.value.width <= 0 || sourceDims.value.height <= 0) return
+  canvas.width = sourceDims.value.width
+  canvas.height = sourceDims.value.height
+  const ctx = canvas.getContext('2d')
+  ctx?.clearRect(0, 0, canvas.width, canvas.height)
+  hasMask.value = false
+}
+
+function clearMask() {
+  const canvas = maskCanvas.value
+  if (!canvas) {
+    hasMask.value = false
+    return
+  }
+  canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height)
+  hasMask.value = false
+}
+
+function paintMask(event: PointerEvent) {
+  const canvas = maskCanvas.value
+  if (!canvas) return
+  const rect = canvas.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return
+  const x = ((event.clientX - rect.left) / rect.width) * canvas.width
+  const y = ((event.clientY - rect.top) / rect.height) * canvas.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.save()
+  ctx.globalCompositeOperation = isErasing.value ? 'destination-out' : 'source-over'
+  ctx.fillStyle = 'rgba(56, 232, 255, 0.42)'
+  ctx.shadowColor = 'rgba(255, 61, 240, 0.45)'
+  ctx.shadowBlur = Math.max(4, brushSize.value / 4)
+  ctx.beginPath()
+  ctx.arc(x, y, brushSize.value, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+  if (!isErasing.value) {
+    hasMask.value = true
+    if (errorMsg.value.includes('涂抹')) {
+      errorMsg.value = ''
+    }
+  }
+}
+
+function startPainting(event: PointerEvent) {
+  if (mode.value !== 'edit') return
+  isPainting.value = true
+  ;(event.currentTarget as HTMLCanvasElement).setPointerCapture(event.pointerId)
+  paintMask(event)
+}
+
+function continuePainting(event: PointerEvent) {
+  if (!isPainting.value) return
+  paintMask(event)
+}
+
+function stopPainting(event: PointerEvent) {
+  isPainting.value = false
+  try {
+    ;(event.currentTarget as HTMLCanvasElement).releasePointerCapture(event.pointerId)
+  } catch {
+    // Pointer capture may already be released by the browser.
+  }
+}
+
+function exportMaskBlob(): Promise<Blob | null> {
+  const canvas = maskCanvas.value
+  if (!canvas || !hasMask.value) return Promise.resolve(null)
+  const mask = document.createElement('canvas')
+  mask.width = canvas.width
+  mask.height = canvas.height
+  const ctx = mask.getContext('2d')
+  if (!ctx) return Promise.resolve(null)
+  const overlay = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height)
+  if (!overlay) return Promise.resolve(null)
+  const out = ctx.createImageData(mask.width, mask.height)
+  for (let i = 0; i < out.data.length; i += 4) {
+    const selected = overlay.data[i + 3] > 0
+    out.data[i] = 0
+    out.data[i + 1] = 0
+    out.data[i + 2] = 0
+    out.data[i + 3] = selected ? 0 : 255
+  }
+  ctx.putImageData(out, 0, 0)
+  return new Promise((resolve) => mask.toBlob((blob) => resolve(blob), 'image/png'))
+}
+
+function applyEditPreset(action: string) {
+  const base = prompt.value.trim()
+  const text = base ? `${base}，${action}` : action
+  prompt.value = text
 }
 
 function applyPreset(preset: Preset) {
@@ -181,6 +393,34 @@ function applyPresetFromQuery(rawPresetId: unknown) {
 
         <div v-if="presetHint" class="font-mono text-[11px] text-tertiary leading-relaxed">
           {{ presetHint }}
+        </div>
+
+        <!-- Generation Mode -->
+        <div class="flex flex-col gap-3">
+          <label class="font-mono text-micro text-on-surface-variant uppercase">模式 · MODE</label>
+          <div
+            class="grid grid-cols-3 gap-1 bg-surface-container-lowest p-1 rounded-xl border border-outline-variant/30"
+          >
+            <button
+              v-for="m in modes"
+              :key="m.id"
+              type="button"
+              class="min-w-0 px-2 py-2.5 rounded-lg border text-center transition-all"
+              :class="
+                mode === m.id
+                  ? 'border-primary/50 bg-primary/10 text-primary shadow-[0_0_16px_rgba(56,232,255,0.12)]'
+                  : 'border-transparent text-on-surface-variant hover:bg-primary/5 hover:text-primary'
+              "
+              :title="m.helper"
+              @click="pickMode(m.id)"
+            >
+              <span class="material-symbols-outlined text-[18px] block mx-auto mb-1">{{ m.icon }}</span>
+              <span class="font-mono text-[10px] leading-none">{{ m.label }}</span>
+            </button>
+          </div>
+          <p class="font-mono text-[11px] leading-relaxed text-on-surface-variant">
+            {{ modes.find((m) => m.id === mode)?.helper }}
+          </p>
         </div>
 
         <!-- Resolution -->
@@ -255,7 +495,7 @@ function applyPresetFromQuery(rawPresetId: unknown) {
           <textarea
             v-model="prompt"
             class="w-full h-32 bg-transparent border-none text-on-surface font-body-md p-4 resize-none focus:ring-0 focus:outline-none placeholder:text-on-surface-variant/40 leading-relaxed"
-            placeholder="描述你的画面… 例如：“午夜里一片生物荧光森林，悬浮着晶莹剔透的结晶体…”"
+            :placeholder="promptPlaceholder"
           ></textarea>
           <div
             class="bg-surface-container/80 backdrop-blur-md px-4 py-3 flex justify-between items-center border-t border-outline-variant/20"
@@ -265,9 +505,17 @@ function applyPresetFromQuery(rawPresetId: unknown) {
                 type="button"
                 class="w-10 h-10 rounded-lg bg-surface-variant text-on-surface-variant flex items-center justify-center hover:text-primary hover:bg-primary/10 transition-colors"
                 title="添加参考图片"
+                @click="openSourcePicker"
               >
                 <span class="material-symbols-outlined text-[18px]">add_photo_alternate</span>
               </button>
+              <input
+                ref="sourceInput"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                class="hidden"
+                @change="handleSourceSelect"
+              />
               <button
                 type="button"
                 class="w-10 h-10 rounded-lg flex items-center justify-center transition-colors"
@@ -295,7 +543,7 @@ function applyPresetFromQuery(rawPresetId: unknown) {
               :disabled="isBusy"
               @click="generate($event)"
             >
-              <span>{{ isBusy ? '合成中' : '生成' }}</span>
+              <span>{{ submitLabel }}</span>
               <span
                 class="material-symbols-outlined text-[18px]"
                 :class="isBusy ? 'animate-spin' : ''"
@@ -314,6 +562,65 @@ function applyPresetFromQuery(rawPresetId: unknown) {
           class="field font-mono text-[12px]"
           placeholder="负面提示词 — 你想避免出现的内容…"
         />
+      </div>
+
+      <!-- Source image controls -->
+      <div
+        v-if="needsSource || sourceFile"
+        class="flex-shrink-0 glass-panel rounded-2xl p-4 flex flex-col gap-3"
+      >
+        <div class="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+          <div>
+            <div class="flex items-center gap-2 text-on-surface">
+              <span class="material-symbols-outlined text-primary text-[18px]">image_search</span>
+              <span class="font-display text-sm font-bold">{{ modeLabel }}参考图</span>
+            </div>
+            <p class="font-mono text-[11px] text-on-surface-variant mt-1">
+              {{ sourceFile ? sourceName : '上传 PNG / JPEG / WebP，最大 10MB。' }}
+              <span v-if="sourceDims.width"> · {{ sourceDims.width }}×{{ sourceDims.height }}</span>
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" class="btn-ghost !min-h-9 !py-2 !px-3 text-xs" @click="openSourcePicker">
+              {{ sourceFile ? '更换图片' : '上传图片' }}
+            </button>
+            <button
+              v-if="sourceFile"
+              type="button"
+              class="btn-ghost !min-h-9 !py-2 !px-3 text-xs"
+              @click="removeSource"
+            >
+              移除
+            </button>
+          </div>
+        </div>
+
+        <div v-if="mode === 'edit'" class="border-t border-outline-variant/20 pt-3 flex flex-col gap-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              v-for="action in ['替换选区', '移除物体', '扩展背景', '重绘材质']"
+              :key="action"
+              type="button"
+              class="px-3 py-1.5 rounded-full border border-outline-variant/30 bg-surface-container-lowest text-[11px] font-mono text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors"
+              @click="applyEditPreset(action)"
+            >
+              {{ action }}
+            </button>
+          </div>
+          <div class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
+            <label class="flex items-center gap-3 font-mono text-[11px] text-on-surface-variant">
+              BRUSH
+              <input v-model.number="brushSize" type="range" min="12" max="120" class="w-full accent-cyan-300" />
+              <span class="w-10 text-right text-primary">{{ brushSize }}</span>
+            </label>
+            <button type="button" class="btn-ghost !min-h-9 !py-2 !px-3 text-xs" @click="isErasing = !isErasing">
+              {{ isErasing ? '擦除中' : '画笔' }}
+            </button>
+            <button type="button" class="btn-ghost !min-h-9 !py-2 !px-3 text-xs" @click="clearMask">
+              清除 Mask
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Inline error -->
@@ -389,6 +696,40 @@ function applyPresetFromQuery(rawPresetId: unknown) {
           <p class="font-body-md text-body-md text-on-surface-variant max-w-md">
             {{ active.error || '渲染未能完成，积分已退还。' }}
           </p>
+        </div>
+
+        <!-- Source preview / mask editor -->
+        <div
+          v-else-if="sourcePreview"
+          class="relative z-10 w-full h-full flex flex-col items-center justify-center p-6 gap-4"
+        >
+          <div
+            class="relative max-w-full max-h-[min(58vh,620px)] rounded-2xl overflow-hidden border border-primary/20 shadow-[0_0_60px_rgba(56,232,255,0.16)]"
+          >
+            <img
+              :src="sourcePreview"
+              alt="参考图预览"
+              class="block max-w-full max-h-[min(58vh,620px)] object-contain"
+              @load="onSourceImageLoad"
+            />
+            <canvas
+              v-if="mode === 'edit'"
+              ref="maskCanvas"
+              class="absolute inset-0 w-full h-full touch-none cursor-crosshair"
+              @pointerdown="startPainting"
+              @pointermove="continuePainting"
+              @pointerup="stopPainting"
+              @pointerleave="stopPainting"
+            ></canvas>
+          </div>
+          <div class="text-center">
+            <p class="font-display text-lg font-bold text-on-surface">
+              {{ mode === 'edit' ? '涂抹要修图的区域' : '参考图已锁定' }}
+            </p>
+            <p class="font-mono text-[11px] text-on-surface-variant mt-1 uppercase tracking-wider">
+              {{ mode === 'edit' ? 'MASK PAINT · ALPHA EXPORT' : 'REFERENCE REMIX · IMAGE-TO-IMAGE' }}
+            </p>
+          </div>
         </div>
 
         <!-- Idle placeholder -->

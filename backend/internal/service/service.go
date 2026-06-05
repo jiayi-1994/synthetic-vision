@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,11 +29,23 @@ var (
 
 // CreateGenInput is the validated input for CreateGeneration.
 type CreateGenInput struct {
+	Mode           string
 	Prompt         string
 	NegativePrompt string
 	Style          string
 	Resolution     string
 	AspectRatio    string
+	SourceImage    *UploadedImage
+	MaskImage      *UploadedImage
+}
+
+// UploadedImage is a bounded in-memory upload handed from the HTTP layer to
+// the service so the pending generation can persist its private source assets.
+type UploadedImage struct {
+	Data      []byte
+	MimeType  string
+	Extension string
+	Filename  string
 }
 
 // Service owns the generation worker pool and all credit-mutating logic.
@@ -190,6 +204,22 @@ func evenInt(v float64) int {
 // CreateGeneration validates input, deducts cost atomically, creates a pending
 // Generation row, then enqueues it for async rendering.
 func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Generation, error) {
+	mode := normalizeMode(in.Mode)
+	if mode == "text" && in.SourceImage != nil {
+		mode = "image"
+		if in.MaskImage != nil {
+			mode = "edit"
+		}
+	}
+	if mode == "" {
+		return nil, ErrInvalidParam
+	}
+	if mode == "image" && in.SourceImage == nil {
+		return nil, ErrInvalidParam
+	}
+	if mode == "edit" && (in.SourceImage == nil || in.MaskImage == nil) {
+		return nil, ErrInvalidParam
+	}
 	cost := CostFor(in.Resolution)
 	if cost < 0 {
 		return nil, ErrInvalidParam
@@ -209,6 +239,7 @@ func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Ge
 	gen := &models.Generation{
 		ID:             uuid.NewString(),
 		UserID:         userID,
+		Mode:           mode,
 		Prompt:         in.Prompt,
 		NegativePrompt: in.NegativePrompt,
 		Resolution:     in.Resolution,
@@ -219,9 +250,12 @@ func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Ge
 		Seed:           seed,
 		Status:         "pending",
 		Cost:           cost,
+		HasSourceImage: in.SourceImage != nil,
+		HasMaskImage:   in.MaskImage != nil,
 		CreatedAt:      time.Now(),
 	}
 
+	var written []string
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var user models.User
 		// NOTE: clause.Locking FOR UPDATE is a no-op under the glebarez/sqlite
@@ -254,9 +288,38 @@ func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Ge
 		if err := tx.Create(gen).Error; err != nil {
 			return err
 		}
+		updates := map[string]any{}
+		if in.SourceImage != nil {
+			path, err := s.writeUploadedImage(gen.ID, "source", in.SourceImage)
+			if err != nil {
+				return err
+			}
+			written = append(written, path)
+			gen.SourceImagePath = path
+			updates["source_image_path"] = path
+			updates["has_source_image"] = true
+		}
+		if in.MaskImage != nil {
+			path, err := s.writeUploadedImage(gen.ID, "mask", in.MaskImage)
+			if err != nil {
+				return err
+			}
+			written = append(written, path)
+			gen.MaskImagePath = path
+			updates["mask_image_path"] = path
+			updates["has_mask_image"] = true
+		}
+		if len(updates) > 0 {
+			if err := tx.Model(gen).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
+		for _, path := range written {
+			_ = os.Remove(path)
+		}
 		return nil, err
 	}
 
@@ -369,13 +432,26 @@ func (s *Service) process(genID string) {
 	}
 
 	rw, rh := renderDimensions(gen.Width, gen.Height)
+	sourceImage, err := loadProviderImage(gen.SourceImagePath)
+	if err != nil {
+		s.fail(&gen, err)
+		return
+	}
+	maskImage, err := loadProviderImage(gen.MaskImagePath)
+	if err != nil {
+		s.fail(&gen, err)
+		return
+	}
 	result, err := s.prov.Generate(s.ctx, provider.GenerateRequest{
+		Mode:           gen.Mode,
 		Prompt:         gen.Prompt,
 		NegativePrompt: gen.NegativePrompt,
 		Style:          gen.Style,
 		Width:          rw,
 		Height:         rh,
 		Seed:           gen.Seed,
+		SourceImage:    sourceImage,
+		MaskImage:      maskImage,
 	})
 	if err != nil {
 		s.fail(&gen, err)
@@ -452,4 +528,81 @@ func validAspect(a string) bool {
 	default:
 		return false
 	}
+}
+
+func normalizeMode(mode string) string {
+	switch strings.TrimSpace(mode) {
+	case "", "text":
+		return "text"
+	case "image", "edit":
+		return strings.TrimSpace(mode)
+	default:
+		return ""
+	}
+}
+
+func (s *Service) writeUploadedImage(genID, suffix string, img *UploadedImage) (string, error) {
+	if img == nil || len(img.Data) == 0 {
+		return "", ErrInvalidParam
+	}
+	if err := os.MkdirAll(s.cfg.ReferencesDir(), 0o755); err != nil {
+		return "", err
+	}
+	ext := normalizedExtension(img)
+	path := filepath.Join(s.cfg.ReferencesDir(), genID+"-"+suffix+ext)
+	if err := os.WriteFile(path, img.Data, 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func normalizedExtension(img *UploadedImage) string {
+	ext := strings.ToLower(strings.TrimSpace(img.Extension))
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".webp":
+		if ext == ".jpeg" {
+			return ".jpg"
+		}
+		return ext
+	}
+	switch img.MimeType {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".png"
+	}
+}
+
+func loadProviderImage(path string) (*provider.InputImage, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return &provider.InputImage{
+		Data:     data,
+		MimeType: detectImageMime(data),
+		Filename: filepath.Base(path),
+	}, nil
+}
+
+func detectImageMime(b []byte) string {
+	if len(b) >= 8 && string(b[:8]) == "\x89PNG\r\n\x1a\n" {
+		return "image/png"
+	}
+	if len(b) >= 3 && b[0] == 0xff && b[1] == 0xd8 && b[2] == 0xff {
+		return "image/jpeg"
+	}
+	if len(b) >= 12 && string(b[:4]) == "RIFF" && string(b[8:12]) == "WEBP" {
+		return "image/webp"
+	}
+	ct := http.DetectContentType(b)
+	if strings.HasPrefix(ct, "image/") {
+		return ct
+	}
+	return "application/octet-stream"
 }

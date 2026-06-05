@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,12 +18,19 @@ import (
 	"syntheticvision/internal/service"
 )
 
+const maxGenerationUploadBytes = 10 << 20
+
 // CreateGeneration validates the request, deducts credits, and enqueues an
 // async render. Returns the freshly created (pending) generation.
 //
 //	POST /api/generations -> 202 generation
 //	402 {"error":"insufficient credits"} when the user is broke.
 func (h *Handler) CreateGeneration(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "multipart/form-data") {
+		h.createMultipartGeneration(w, r)
+		return
+	}
+
 	var req createGenRequest
 	if !decodeJSON(w, r, &req) {
 		return
@@ -34,6 +43,7 @@ func (h *Handler) CreateGeneration(w http.ResponseWriter, r *http.Request) {
 
 	uid := middleware.UserID(r)
 	gen, err := h.Svc.CreateGeneration(uid, service.CreateGenInput{
+		Mode:           req.Mode,
 		Prompt:         req.Prompt,
 		NegativePrompt: req.NegativePrompt,
 		Style:          req.Style,
@@ -53,6 +63,119 @@ func (h *Handler) CreateGeneration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, gen)
+}
+
+func (h *Handler) createMultipartGeneration(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, (2*maxGenerationUploadBytes)+(4<<20))
+	if err := r.ParseMultipartForm(2 * maxGenerationUploadBytes); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid multipart body")
+		return
+	}
+
+	prompt := strings.TrimSpace(r.FormValue("prompt"))
+	if prompt == "" {
+		writeError(w, http.StatusUnprocessableEntity, "prompt is required")
+		return
+	}
+
+	sourceImage, err := readGenerationUpload(r, "source_image", map[string]bool{
+		"image/png":  true,
+		"image/jpeg": true,
+		"image/webp": true,
+	})
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	maskImage, err := readGenerationUpload(r, "mask_image", map[string]bool{
+		"image/png": true,
+	})
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+
+	uid := middleware.UserID(r)
+	gen, err := h.Svc.CreateGeneration(uid, service.CreateGenInput{
+		Mode:           r.FormValue("mode"),
+		Prompt:         prompt,
+		NegativePrompt: r.FormValue("negative_prompt"),
+		Style:          r.FormValue("style"),
+		Resolution:     r.FormValue("resolution"),
+		AspectRatio:    r.FormValue("aspect_ratio"),
+		SourceImage:    sourceImage,
+		MaskImage:      maskImage,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInsufficientCredits):
+			writeError(w, http.StatusPaymentRequired, "insufficient credits")
+		case errors.Is(err, service.ErrInvalidParam):
+			writeError(w, http.StatusUnprocessableEntity, "invalid parameter")
+		default:
+			writeError(w, http.StatusInternalServerError, "failed to create generation")
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, gen)
+}
+
+func readGenerationUpload(r *http.Request, field string, allowed map[string]bool) (*service.UploadedImage, error) {
+	file, header, err := r.FormFile(field)
+	if err != nil {
+		if errors.Is(err, http.ErrMissingFile) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("invalid %s upload", field)
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxGenerationUploadBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read %s upload", field)
+	}
+	if len(data) > maxGenerationUploadBytes {
+		return nil, fmt.Errorf("%s must be 10MB or smaller", field)
+	}
+	mime := sniffImageMime(data)
+	if !allowed[mime] {
+		return nil, fmt.Errorf("%s has unsupported image type", field)
+	}
+	return &service.UploadedImage{
+		Data:      data,
+		MimeType:  mime,
+		Extension: extensionForImageMime(mime),
+		Filename:  header.Filename,
+	}, nil
+}
+
+func sniffImageMime(b []byte) string {
+	if len(b) >= 8 && string(b[:8]) == "\x89PNG\r\n\x1a\n" {
+		return "image/png"
+	}
+	if len(b) >= 3 && b[0] == 0xff && b[1] == 0xd8 && b[2] == 0xff {
+		return "image/jpeg"
+	}
+	if len(b) >= 12 && string(b[:4]) == "RIFF" && string(b[8:12]) == "WEBP" {
+		return "image/webp"
+	}
+	ct := http.DetectContentType(b)
+	if strings.HasPrefix(ct, "image/") {
+		return ct
+	}
+	return "application/octet-stream"
+}
+
+func extensionForImageMime(mime string) string {
+	switch mime {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".png"
+	}
 }
 
 // ListGenerations returns the caller's generations, newest first, optionally
@@ -140,6 +263,14 @@ func (h *Handler) DeleteGeneration(w http.ResponseWriter, r *http.Request) {
 	if err := os.Remove(imgPath); err != nil && !os.IsNotExist(err) {
 		// Log-worthy but not fatal; the row is already gone.
 		_ = err
+	}
+	for _, assetPath := range []string{gen.SourceImagePath, gen.MaskImagePath} {
+		if assetPath == "" {
+			continue
+		}
+		if err := os.Remove(assetPath); err != nil && !os.IsNotExist(err) {
+			_ = err
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})

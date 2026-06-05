@@ -54,6 +54,7 @@ type loginRequest struct {
 }
 
 type createGenRequest struct {
+	Mode           string `json:"mode"`
 	Prompt         string `json:"prompt"`
 	NegativePrompt string `json:"negative_prompt"`
 	Style          string `json:"style"`

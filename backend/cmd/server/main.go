@@ -32,6 +32,9 @@ func main() {
 	if err := os.MkdirAll(cfg.ImagesDir(), 0o755); err != nil {
 		log.Fatalf("create images dir: %v", err)
 	}
+	if err := os.MkdirAll(cfg.ReferencesDir(), 0o755); err != nil {
+		log.Fatalf("create references dir: %v", err)
+	}
 
 	gdb, err := db.Open(cfg.DBPath())
 	if err != nil {

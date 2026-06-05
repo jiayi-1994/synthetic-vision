@@ -1,6 +1,6 @@
 # Synthetic Vision — Build Spec (single source of truth)
 
-> AI text-to-image SaaS. Credit-based. Dark glassmorphism UI ("Midnight Spectrum").
+> AI image generation/editing SaaS. Credit-based. Dark glassmorphism UI ("Midnight Spectrum").
 > Backend: **Go 1.24** (chi + GORM + pure-Go SQLite). Frontend: **Vue 3 + TS + Vite + Pinia + Tailwind 3 + axios**.
 > Design reference: `_design/*.html` (exact Stitch Tailwind markup) and `_design/*.png` (screenshots).
 > **Every agent MUST read this whole file and match the names/shapes EXACTLY. Cross-file calls only work if signatures match this spec verbatim.**
@@ -164,8 +164,9 @@ type Config struct {
     SeedDemoUsers   bool   // SEED_DEMO_USERS, default true
 }
 func Load() Config        // read env with defaults
-func (c Config) ImagesDir() string  // filepath.Join(DataDir, "images")
-func (c Config) DBPath() string      // filepath.Join(DataDir, "synthetic-vision.db")
+func (c Config) ImagesDir() string      // filepath.Join(DataDir, "images")
+func (c Config) ReferencesDir() string  // filepath.Join(DataDir, "references")
+func (c Config) DBPath() string         // filepath.Join(DataDir, "synthetic-vision.db")
 ```
 
 ### internal/models — `package models`
@@ -187,6 +188,7 @@ type User struct {
 type Generation struct {
     ID             string     `gorm:"primaryKey;size:36" json:"id"`
     UserID         string     `gorm:"index;size:36" json:"-"`
+    Mode           string     `gorm:"size:16;default:text" json:"mode"` // text|image|edit
     Prompt         string     `gorm:"type:text" json:"prompt"`
     NegativePrompt string     `gorm:"type:text" json:"negative_prompt"`
     Resolution     string     `gorm:"size:8" json:"resolution"`
@@ -198,6 +200,10 @@ type Generation struct {
     Status         string     `gorm:"size:16;index" json:"status"`
     Cost           int        `json:"cost"`
     ImageURL       string     `gorm:"size:255" json:"image_url"`   // e.g. "/images/<id>.png"
+    SourceImagePath string    `gorm:"size:512" json:"-"`
+    MaskImagePath   string    `gorm:"size:512" json:"-"`
+    HasSourceImage  bool      `gorm:"default:false" json:"has_source_image"`
+    HasMaskImage    bool      `gorm:"default:false" json:"has_mask_image"`
     Error          string     `gorm:"type:text" json:"error"`
     CreatedAt      time.Time  `json:"created_at"`
     CompletedAt    *time.Time `json:"completed_at"`
@@ -239,12 +245,13 @@ func Role(r *http.Request) string
 
 ### internal/provider — `package provider`
 ```go
-type GenerateRequest struct { Prompt, NegativePrompt, Style string; Width, Height int; Seed int64 }
+type InputImage struct { Data []byte; MimeType string; Filename string }
+type GenerateRequest struct { Mode, Prompt, NegativePrompt, Style string; Width, Height int; Seed int64; SourceImage, MaskImage *InputImage }
 type GenerateResult struct { Image []byte; MimeType string }   // PNG bytes
 type Provider interface { Name() string; Generate(ctx context.Context, req GenerateRequest) (*GenerateResult, error) }
 func New(cfg config.Config) Provider   // returns Mock or OpenAI by cfg.ImageProvider (default mock)
-// mock.go: MockProvider — deterministic on-brand abstract art (see §6); honors cfg.MockDelayMs
-// openai.go: OpenAIProvider — POST {BaseURL}/v1/images/generations {model,prompt,size:"WxH",n:1,response_format:"b64_json"}; Bearer APIKey; decode b64_json → PNG; fall back to url field (download). If decode is non-PNG, still store raw bytes with detected mime.
+// mock.go: MockProvider — deterministic on-brand abstract art (see §6); honors cfg.MockDelayMs; source/mask bytes affect the render seed and overlay.
+// openai.go: OpenAIProvider — text mode POSTs JSON to {BaseURL}/v1/images/generations; image/edit modes POST multipart to {BaseURL}/v1/images/edits with image[] and optional mask. Decode b64_json → PNG; fall back to url field (download). If decode is non-PNG, still store raw bytes with detected mime.
 ```
 
 ### internal/service — `package service`
@@ -257,7 +264,8 @@ func (s *Service) Stop()
 // in a db transaction: load user FOR UPDATE-ish, ensure Credits>=cost, decrement, write CreditTransaction(reason "generation", -cost),
 // create Generation(status "pending"); then enqueue id; returns the Generation (or ErrInsufficientCredits).
 func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Generation, error)
-type CreateGenInput struct { Prompt, NegativePrompt, Style, Resolution, AspectRatio string }
+type UploadedImage struct { Data []byte; MimeType, Extension, Filename string }
+type CreateGenInput struct { Mode, Prompt, NegativePrompt, Style, Resolution, AspectRatio string; SourceImage, MaskImage *UploadedImage }
 var ErrInsufficientCredits = errors.New("insufficient credits")
 var ErrInvalidParam = errors.New("invalid parameter")
 func CostFor(resolution string) int        // 1K→5,2K→15,4K→40; unknown→ -1
@@ -277,7 +285,7 @@ func (h *Handler) Register(w,r)   // POST /api/auth/register {username,email,pas
 func (h *Handler) Login(w,r)      // POST /api/auth/login {email,password} → {token,user}
 func (h *Handler) Me(w,r)         // GET  /api/auth/me → {user}
 // generation.go
-func (h *Handler) CreateGeneration(w,r) // POST /api/generations → 202 generation
+func (h *Handler) CreateGeneration(w,r) // POST /api/generations JSON or multipart → 202 generation
 func (h *Handler) ListGenerations(w,r)  // GET  /api/generations?status=&limit= → {generations:[...]}
 func (h *Handler) GetGeneration(w,r)    // GET  /api/generations/{id} (owner) → generation
 func (h *Handler) DeleteGeneration(w,r) // DELETE /api/generations/{id} (owner) → {ok:true}; remove file
@@ -332,7 +340,7 @@ Auth token: `Authorization: Bearer <jwt>`. Errors: `{ "error": "<message>" }` wi
 | GET | /api/me/stats | — | `{user,total_generations,completed_generations,credit_balance}` |
 | GET | /api/me/analytics | — | `{user,summary,status_distribution,resolution_distribution,aspect_ratio_distribution,credit_breakdown,recent_generations}` |
 | GET | /api/generations/cost | `?resolution=2K` | `{cost: 15}` |
-| POST | /api/generations | `{prompt,negative_prompt?,style?,resolution,aspect_ratio}` | 202 `generation` (402 `{error:"insufficient credits"}` when broke) |
+| POST | /api/generations | JSON `{mode:"text"?,prompt,negative_prompt?,style?,resolution,aspect_ratio}` or multipart `{mode:"image"|"edit",prompt,negative_prompt?,style?,resolution,aspect_ratio,source_image,mask_image?}` | 202 `generation` (402 `{error:"insufficient credits"}` when broke) |
 | GET | /api/generations | `?status=&limit=` | `{generations:[generation,...]}` |
 | GET | /api/generations/{id} | — | `generation` (404/403) |
 | DELETE | /api/generations/{id} | — | `{ok:true}` |
@@ -350,12 +358,13 @@ Auth token: `Authorization: Bearer <jwt>`. Errors: `{ "error": "<message>" }` wi
 ```ts
 export interface User { id:string; public_id:string; username:string; email:string; role:'user'|'admin'; plan:string; credits:number; avatar_seed:string; created_at:string }
 export type GenStatus = 'pending'|'processing'|'completed'|'failed'
+export type GenerationMode = 'text'|'image'|'edit'
 export type Resolution = '1K'|'2K'|'4K'
 export type AspectRatio = '1:1'|'4:3'|'16:9'|'9:16'
-export interface Generation { id:string; prompt:string; negative_prompt:string; resolution:Resolution; aspect_ratio:AspectRatio; style:string; width:number; height:number; seed:number; status:GenStatus; cost:number; image_url:string; error:string; created_at:string; completed_at:string|null }
+export interface Generation { id:string; mode:GenerationMode; prompt:string; negative_prompt:string; resolution:Resolution; aspect_ratio:AspectRatio; style:string; width:number; height:number; seed:number; status:GenStatus; cost:number; image_url:string; has_source_image:boolean; has_mask_image:boolean; error:string; created_at:string; completed_at:string|null }
 export interface AdminUser { public_id:string; username:string; email:string; credits:number; role:string; plan:string; last_activity_at:string; initials:string; created_at:string }
 export interface Stats { user:User; total_generations:number; completed_generations:number; credit_balance:number }
-export interface CreateGenInput { prompt:string; negative_prompt?:string; style?:string; resolution:Resolution; aspect_ratio:AspectRatio }
+export interface CreateGenInput { mode?:GenerationMode; prompt:string; negative_prompt?:string; style?:string; resolution:Resolution; aspect_ratio:AspectRatio; source_image?:File; mask_image?:Blob|File }
 
 export interface AnalyticsDistributionItem { label:string; count:number; percentage:number }
 export interface AnalyticsSummary { total_generations:number; completed_generations:number; failed_generations:number; pending_generations:number; processing_generations:number; success_rate:number; credits_spent:number; credits_refunded:number; credit_balance:number }

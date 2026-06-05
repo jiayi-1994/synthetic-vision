@@ -66,6 +66,13 @@ func (m *MockProvider) Generate(ctx context.Context, req GenerateRequest) (*Gene
 
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(req.Prompt))
+	_, _ = h.Write([]byte(req.Mode))
+	if req.SourceImage != nil {
+		_, _ = h.Write(req.SourceImage.Data[:min(len(req.SourceImage.Data), 4096)])
+	}
+	if req.MaskImage != nil {
+		_, _ = h.Write(req.MaskImage.Data[:min(len(req.MaskImage.Data), 4096)])
+	}
 	seed := req.Seed ^ int64(h.Sum64())
 	rng := rand.New(rand.NewSource(seed))
 
@@ -148,6 +155,9 @@ func (m *MockProvider) Generate(ctx context.Context, req GenerateRequest) (*Gene
 		drawRings(img, rng, w, h2)
 	} else {
 		drawLines(img, rng, w, h2)
+	}
+	if req.SourceImage != nil {
+		drawReferenceEditOverlay(img, w, h2, req.MaskImage != nil)
 	}
 
 	// 4. Subtle per-pixel noise.
@@ -282,6 +292,34 @@ func drawLine(img *image.RGBA, x0, y0, x1, y1 float64, col color.RGBA, alpha flo
 			continue
 		}
 		blendOver(img, x, y, col, alpha)
+	}
+}
+
+func drawReferenceEditOverlay(img *image.RGBA, w, h int, masked bool) {
+	cyan := color.RGBA{0x38, 0xe8, 0xff, 0xff}
+	magenta := color.RGBA{0xff, 0x3d, 0xf0, 0xff}
+	margin := max(10, min(w, h)/24)
+	for i := 0; i < 3; i++ {
+		alpha := 0.28 - float64(i)*0.06
+		x0 := margin + i*5
+		y0 := margin + i*5
+		x1 := w - margin - i*5
+		y1 := h - margin - i*5
+		for x := x0; x < x1; x++ {
+			blendOver(img, x, y0, cyan, alpha)
+			blendOver(img, x, y1, cyan, alpha)
+		}
+		for y := y0; y < y1; y++ {
+			blendOver(img, x0, y, cyan, alpha)
+			blendOver(img, x1, y, cyan, alpha)
+		}
+	}
+	if !masked {
+		return
+	}
+	step := max(18, min(w, h)/18)
+	for x := -h; x < w+h; x += step {
+		drawLine(img, float64(x), 0, float64(x+h), float64(h), magenta, 0.13)
 	}
 }
 

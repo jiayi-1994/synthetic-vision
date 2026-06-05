@@ -1,6 +1,6 @@
 # Synthetic Vision
 
-> An AI **text-to-image SaaS**, credit-based, wrapped in a dark glassmorphism UI
+> An AI **image generation and editing SaaS**, credit-based, wrapped in a dark glassmorphism UI
 > ("Midnight Spectrum"). A single self-contained Go binary serves both the REST
 > API and the embedded Vue 3 single-page app. No external database or services
 > required — it ships with pure-Go SQLite and a built-in **mock image provider**,
@@ -10,8 +10,9 @@
   JWT auth, a background generation worker pool.
 - **Frontend:** Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS 3 + axios,
   built and **embedded** into the Go binary via `go:embed`.
-- **Image generation:** a deterministic, on-brand **mock** generator by default;
-  switchable to any **OpenAI-compatible** `/v1/images/generations` endpoint.
+- **Image generation/editing:** a deterministic, on-brand **mock** generator by
+  default; switchable to OpenAI-compatible `/v1/images/generations` and
+  `/v1/images/edits` endpoints.
 
 ---
 
@@ -23,7 +24,7 @@ The UI is built to match the design references in [`_design/`](./_design)
 | Screen | Route | What it does |
 |---|---|---|
 | **Login / Register** | `/login` | Atmospheric glass card. Toggles between *Initialize Session* (login) and *Request New Allocation* (register). New accounts get a **1,250-credit** signup bonus. |
-| **Dashboard** | `/` | The generation workspace. Left panel: **Generation Parameters** (Resolution 1K/2K/4K segmented, Aspect-ratio 2×2 grid, live **Energy Cost**). Right: prompt editor + the **Canvas** that shows the idle placeholder, the *Synthesizing Vision* progress state, then the finished image. |
+| **Dashboard** | `/` | The generation/editing workspace. Left panel: **Generation Parameters** plus mode switch (**文生图 / 图生图 / 局部修图**), resolution, aspect, and live **Energy Cost**. Right: prompt editor, reference image upload, lightweight mask brush for local edits, and the **Canvas** that shows the source preview, progress state, then the finished image. |
 | **Gallery** | `/gallery` | Profile header (avatar, plan, total generations, credit balance from `/api/me/stats`) plus a **Recent Output** grid of your completed images, with download and delete. |
 | **Admin** | `/admin` | *(admins only)* **User Directory** table with credit pills, a **Manual Credit Injection** form (top up any user by their `public_id`), and a **Compute Cluster** status card. |
 | **Marketplace** | `/marketplace` | Curated preset browser with reusable templates, quick **Apply** to prefill Dashboard settings, and no backend commerce dependencies. |
@@ -114,7 +115,7 @@ Sensible defaults make the app run with zero configuration.
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `8080` | HTTP listen port. |
-| `DATA_DIR` | `./data` | Directory for the SQLite database and generated images. In Docker this is the `/data` volume. |
+| `DATA_DIR` | `./data` | Directory for the SQLite database, generated images, and private source/mask references. In Docker this is the `/data` volume. |
 | `JWT_SECRET` | `dev-insecure-change-me` | Signing secret for session tokens. **Keep this stable across restarts** — changing it invalidates every existing session and forces all users to re-login. Use a strong value in production (`openssl rand -hex 32`). |
 | `JWT_TTL_HOURS` | `168` | Session token lifetime, in hours (default 7 days). |
 | `IMAGE_PROVIDER` | `mock` | Image backend: `mock` or `openai`. |
@@ -132,9 +133,9 @@ Sensible defaults make the app run with zero configuration.
 ## Switching to a real (OpenAI-compatible) image provider
 
 By default `IMAGE_PROVIDER=mock` generates deterministic, on-brand abstract art
-locally — no API key, no network. To produce **real** images from any
-OpenAI-compatible image endpoint (OpenAI itself, or a compatible gateway/proxy),
-set these in your `.env`:
+locally — no API key, no network. It also supports source-image and mask-backed
+edit modes for end-to-end demos. To produce **real** images from OpenAI or a
+compatible gateway/proxy, set these in your `.env`:
 
 ```dotenv
 IMAGE_PROVIDER=openai
@@ -143,11 +144,13 @@ OPENAI_API_KEY=sk-...                       # your bearer key
 IMAGE_MODEL=gpt-image-1                       # accepts arbitrary WxH sizes
 ```
 
-The backend then POSTs to `{OPENAI_BASE_URL}/v1/images/generations` with
-`{model, prompt, size:"WxH", n:1, response_format:"b64_json"}` and a
-`Bearer` token, decodes the returned image, and stores it like any other
-generation. The requested resolution + aspect ratio are sent verbatim as
-`size` (the longest side is capped at 1024 to keep payloads small).
+The backend POSTs text-only jobs to `{OPENAI_BASE_URL}/v1/images/generations`
+with `{model, prompt, size:"WxH", n:1, response_format:"b64_json"}`. When the
+Dashboard sends a reference image or mask, the backend stores the upload under
+`DATA_DIR/references` and POSTs multipart form data to
+`{OPENAI_BASE_URL}/v1/images/edits` with `image[]`, optional `mask`, `model`,
+`prompt`, and `size`. The returned image is decoded and stored like any other
+generation result.
 
 > **Model size constraints.** `gpt-image-1` accepts arbitrary `WxH` sizes, so
 > every resolution/aspect combination works. **`dall-e-3` only accepts
@@ -206,7 +209,7 @@ user from the Admin screen (*Manual Credit Injection*).
   Go binary at compile time (`backend/web/web.go` `go:embed all:dist`). One
   process serves the API, the generated images, and the SPA — with client-side
   history fallback for unknown non-`/api`, non-`/images` paths.
-- **Async generation.** Creating a generation deducts credits in a single DB
+- **Async generation/editing.** Creating a generation deducts credits in a single DB
   transaction, records the generation as `pending`, and enqueues it. A pool of
   `GEN_WORKERS` goroutines moves it `pending → processing → completed`, writing
   the PNG to `DATA_DIR/images/<id>.png`. On provider failure it becomes `failed`
@@ -217,7 +220,8 @@ user from the Admin screen (*Manual Credit Injection*).
 - **Pluggable provider.** `IMAGE_PROVIDER` selects the implementation behind a
   small `Provider` interface, so the mock and the real OpenAI-compatible backend
   are interchangeable without touching the rest of the app.
-- **Persistence.** SQLite database and generated PNGs both live under
+- **Persistence.** SQLite database, generated PNGs, and private source/mask
+  reference uploads all live under
   `DATA_DIR` (the `/data` volume in Docker), so all state survives restarts.
 
 ---

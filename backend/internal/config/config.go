@@ -75,6 +75,10 @@ func validateSecurity(cfg Config) {
 // ImagesDir returns the directory where generated PNGs are stored.
 func (c Config) ImagesDir() string { return filepath.Join(c.DataDir, "images") }
 
+// ReferencesDir returns the private directory where uploaded source images and
+// masks are stored for image-to-image / edit jobs.
+func (c Config) ReferencesDir() string { return filepath.Join(c.DataDir, "references") }
+
 // DBPath returns the SQLite database file path.
 func (c Config) DBPath() string { return filepath.Join(c.DataDir, "synthetic-vision.db") }
 
