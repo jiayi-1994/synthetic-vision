@@ -39,9 +39,20 @@ const modes: { id: GenerationMode; label: string; icon: string; helper: string }
   { id: 'image', label: '图生图', icon: 'add_photo_alternate', helper: '上传参考图后重绘风格与细节' },
   { id: 'edit', label: '局部修图', icon: 'brush', helper: '涂抹区域后进行局部替换或移除' },
 ]
+const editActions = [
+  { id: 'replace', label: '替换选区', icon: 'ink_eraser', helper: '默认：只重绘你涂抹的区域，未选区保持原图。' },
+  { id: 'remove', label: '移除物体', icon: 'backspace', helper: '适合擦掉选区内的物体，并用周围内容自然补全。' },
+  { id: 'outpaint', label: '扩展背景', icon: 'open_in_full', helper: '适合延展边缘、背景和构图空间。' },
+  { id: 'material', label: '重绘材质', icon: 'texture', helper: '保留选区结构，替换表面质感、颜色或材质。' },
+] as const
+type EditActionId = (typeof editActions)[number]['id']
+const editAction = ref<EditActionId>('replace')
 
 const cost = computed(() => COSTS[resolution.value])
 const needsSource = computed(() => mode.value === 'image' || mode.value === 'edit')
+const selectedEditAction = computed(
+  () => editActions.find((action) => action.id === editAction.value) ?? editActions[0]
+)
 const activeOutputSourceUrl = computed(() => {
   if (!needsSource.value || sourceFile.value) return ''
   if (active.value?.status !== 'completed' || !active.value.image_url) return ''
@@ -170,7 +181,8 @@ function ratioBox(a: { w: number; h: number }) {
 
 async function generate(e?: MouseEvent) {
   if (isBusy.value) return
-  if (!prompt.value.trim()) {
+  const promptText = prompt.value.trim()
+  if (!promptText) {
     errorMsg.value = '请先描述你的画面再开始合成。'
     return
   }
@@ -197,10 +209,12 @@ async function generate(e?: MouseEvent) {
   }
   if (e) clickSpark(e)
   errorMsg.value = ''
+  const effectivePrompt =
+    mode.value === 'edit' ? `${selectedEditAction.value.label}：${promptText}` : promptText
   try {
     await gen.create({
       mode: mode.value,
-      prompt: prompt.value.trim(),
+      prompt: effectivePrompt,
       negative_prompt: negativePrompt.value.trim() || undefined,
       style: style.value,
       resolution: resolution.value,
@@ -372,10 +386,11 @@ function exportMaskBlob(): Promise<Blob | null> {
   return new Promise((resolve) => mask.toBlob((blob) => resolve(blob), 'image/png'))
 }
 
-function applyEditPreset(action: string) {
-  const base = prompt.value.trim()
-  const text = base ? `${base}，${action}` : action
-  prompt.value = text
+function applyEditPreset(action: (typeof editActions)[number]) {
+  editAction.value = action.id
+  if (!prompt.value.trim()) {
+    prompt.value = action.helper
+  }
 }
 
 function applyPreset(preset: Preset) {
@@ -631,16 +646,52 @@ function applyPresetFromQuery(rawPresetId: unknown) {
         </div>
 
         <div v-if="mode === 'edit'" class="border-t border-outline-variant/20 pt-3 flex flex-col gap-3">
-          <div class="flex flex-wrap items-center gap-2">
-            <button
-              v-for="action in ['替换选区', '移除物体', '扩展背景', '重绘材质']"
-              :key="action"
-              type="button"
-              class="px-3 py-1.5 rounded-full border border-outline-variant/30 bg-surface-container-lowest text-[11px] font-mono text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors"
-              @click="applyEditPreset(action)"
-            >
-              {{ action }}
-            </button>
+          <div
+            class="rounded-xl border border-primary/25 bg-surface-container-lowest/80 p-3 shadow-[0_0_24px_rgba(56,232,255,0.08)]"
+          >
+            <div class="mb-2 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+              <span class="font-mono text-[11px] uppercase tracking-wider text-primary">
+                处理方式 · ACTION
+              </span>
+              <span class="font-mono text-[10px] text-on-surface-variant">
+                默认已选中：{{ selectedEditAction.label }}
+              </span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <button
+                v-for="action in editActions"
+                :key="action.id"
+                type="button"
+                class="group flex min-h-14 items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                :class="
+                  editAction === action.id
+                    ? 'border-primary/60 bg-primary/15 text-primary shadow-[0_0_18px_rgba(56,232,255,0.16)]'
+                    : 'border-outline-variant/35 bg-surface-container/60 text-on-surface-variant hover:border-primary/40 hover:bg-primary/10 hover:text-primary'
+                "
+                @click="applyEditPreset(action)"
+              >
+                <span
+                  class="material-symbols-outlined text-[18px]"
+                  :class="
+                    editAction === action.id
+                      ? 'text-secondary'
+                      : 'text-on-surface-variant group-hover:text-primary'
+                  "
+                  >{{ action.icon }}</span
+                >
+                <span class="min-w-0">
+                  <span class="block font-mono text-[11px] leading-tight">{{ action.label }}</span>
+                  <span
+                    v-if="editAction === action.id"
+                    class="mt-0.5 block font-mono text-[9px] uppercase tracking-wider text-secondary"
+                    >SELECTED</span
+                  >
+                </span>
+              </button>
+            </div>
+            <p class="mt-2 font-mono text-[11px] leading-relaxed text-on-surface-variant">
+              {{ selectedEditAction.helper }}
+            </p>
           </div>
           <div class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
             <label class="flex items-center gap-3 font-mono text-[11px] text-on-surface-variant">

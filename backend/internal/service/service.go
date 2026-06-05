@@ -457,6 +457,15 @@ func (s *Service) process(genID string) {
 		s.fail(&gen, err)
 		return
 	}
+	if gen.Mode == "edit" && sourceImage != nil && maskImage != nil {
+		composited, err := compositeMaskedEdit(result.Image, sourceImage.Data, maskImage.Data)
+		if err != nil {
+			s.fail(&gen, err)
+			return
+		}
+		result.Image = composited
+		result.MimeType = "image/png"
+	}
 
 	if err := os.MkdirAll(s.cfg.ImagesDir(), 0o755); err != nil {
 		s.fail(&gen, err)
