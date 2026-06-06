@@ -1,3 +1,13 @@
+---
+title: Synthetic Vision
+emoji: 🎨
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+app_port: 8080
+pinned: false
+---
+
 # Synthetic Vision
 
 > An AI **image generation and editing SaaS**, credit-based, wrapped in a dark glassmorphism UI
