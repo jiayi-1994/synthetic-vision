@@ -28,11 +28,19 @@ RUN CGO_ENABLED=0 go build -o /out/server ./cmd/server
 FROM alpine:3.20
 # ca-certificates: the CGO_ENABLED=0 binary has no system cert fallback, so the
 # OpenAI provider's HTTPS calls fail without these. tzdata: correct timestamps.
+# sqlite: the `sqlite3` CLI for WAL-safe online backups (backup.sh) — the app
+# itself uses the embedded pure-Go driver and does not need it.
 RUN adduser -D -u 1000 app && mkdir -p /data && chown app /data \
- && apk add --no-cache ca-certificates tzdata
+ && apk add --no-cache ca-certificates tzdata sqlite
 COPY --from=be /out/server /usr/local/bin/server
+COPY entrypoint.sh backup.sh /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/backup.sh
+# uid 1000 matches the runtime uid HF grants bucket-FUSE write access to.
 USER app
 ENV DATA_DIR=/data PORT=8080
 EXPOSE 8080
 VOLUME /data
-CMD ["server"]
+# entrypoint restores /data from the /backup bucket (if mounted) and starts
+# the backup loop before exec'ing the server. Without /backup it just runs
+# the server, so docker-compose usage is unchanged.
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
