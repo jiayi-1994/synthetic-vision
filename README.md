@@ -92,6 +92,16 @@ Open **http://localhost:5173** during development. (The backend on `:8080`
 also serves the *built* SPA from `backend/web/dist` once you run a production
 build.)
 
+### Option C — Hugging Face Spaces (free, with persistent backups)
+
+The repo deploys as-is to a **docker SDK Space** (the README frontmatter sets
+`app_port: 8080`). Persistence uses a free **HF bucket** in a dump/restore
+pattern: the live SQLite DB stays on the Space's ephemeral disk and
+`backup.sh` snapshots it (WAL-safe `sqlite3 .backup`) to the bucket every 15
+minutes; `entrypoint.sh` restores on cold boot. Full runbook — Space/bucket
+setup, secrets, deploy command, backup/recovery ops:
+**[docs/deploy-hf.md](./docs/deploy-hf.md)**.
+
 ### Makefile shortcuts (Unix-like shells)
 
 On Linux/macOS, WSL, or Git Bash you can use:
