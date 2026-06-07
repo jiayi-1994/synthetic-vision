@@ -60,6 +60,7 @@ type createGenRequest struct {
 	Style          string `json:"style"`
 	Resolution     string `json:"resolution"`
 	AspectRatio    string `json:"aspect_ratio"`
+	Count          int    `json:"count"`
 }
 
 type injectCreditsRequest struct {

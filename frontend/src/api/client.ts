@@ -73,13 +73,13 @@ export const GenAPI = {
     const { data } = await api.get('/generations/cost', { params: { resolution } })
     return data.cost
   },
-  async create(input: CreateGenInput): Promise<Generation> {
+  async create(input: CreateGenInput): Promise<Generation[]> {
     const needsMultipart =
       input.mode === 'image' || input.mode === 'edit' || !!input.source_image || !!input.mask_image
 
     if (!needsMultipart) {
       const { data } = await api.post('/generations', input)
-      return data
+      return data.generations
     }
 
     const form = new FormData()
@@ -89,11 +89,14 @@ export const GenAPI = {
     form.set('aspect_ratio', input.aspect_ratio)
     if (input.negative_prompt) form.set('negative_prompt', input.negative_prompt)
     if (input.style) form.set('style', input.style)
+    if (input.count) {
+      form.set('count', String(input.count))
+    }
     if (input.source_image) form.set('source_image', input.source_image)
     if (input.mask_image) form.set('mask_image', input.mask_image, 'mask.png')
 
     const { data } = await api.post('/generations', form)
-    return data
+    return data.generations
   },
   async list(params?: { status?: GenStatus; limit?: number }): Promise<Generation[]> {
     const { data } = await api.get('/generations', { params })

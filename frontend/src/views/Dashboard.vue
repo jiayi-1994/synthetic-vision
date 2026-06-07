@@ -9,7 +9,7 @@ import { useMagnet, clickSpark } from '@/composables/useInteractions'
 import type { Resolution, AspectRatio, GenerationMode, Preset } from '@/types'
 
 const gen = useGenerationsStore()
-const { active } = storeToRefs(gen)
+const { active, activeBatchProgress } = storeToRefs(gen)
 
 const prompt = ref('')
 const negativePrompt = ref('')
@@ -34,6 +34,8 @@ const route = useRoute()
 const router = useRouter()
 
 const genBtn = useMagnet(5)
+const MAX_BATCH_COUNT = 8
+
 const modes: { id: GenerationMode; label: string; icon: string; helper: string }[] = [
   { id: 'text', label: '文生图', icon: 'auto_awesome', helper: '从提示词直接生成新画面' },
   { id: 'image', label: '图生图', icon: 'add_photo_alternate', helper: '上传参考图后重绘风格与细节' },
@@ -47,8 +49,11 @@ const editActions = [
 ] as const
 type EditActionId = (typeof editActions)[number]['id']
 const editAction = ref<EditActionId>('replace')
+const batchCount = ref(1)
 
 const cost = computed(() => COSTS[resolution.value])
+const normalizedBatchCount = computed(() => normalizeBatchCount(batchCount.value))
+const estimatedCost = computed(() => cost.value * normalizedBatchCount.value)
 const needsSource = computed(() => mode.value === 'image' || mode.value === 'edit')
 const selectedEditAction = computed(
   () => editActions.find((action) => action.id === editAction.value) ?? editActions[0]
@@ -81,7 +86,7 @@ const submitLabel = computed(() => {
   if (isBusy.value) return '合成中'
   if (mode.value === 'image') return '重绘'
   if (mode.value === 'edit') return '修图'
-  return '生成'
+  return normalizedBatchCount.value > 1 ? `生成${normalizedBatchCount.value}张` : '生成'
 })
 
 const isBusy = computed(
@@ -108,6 +113,14 @@ function stopFakeProgress() {
     clearInterval(progTimer)
     progTimer = undefined
   }
+}
+
+function normalizeBatchCount(v: number): number {
+  if (!Number.isFinite(v) || Number.isNaN(v)) return 1
+  const c = Math.floor(v)
+  if (c < 1) return 1
+  if (c > MAX_BATCH_COUNT) return MAX_BATCH_COUNT
+  return c
 }
 
 watch(isBusy, (busy) => {
@@ -137,6 +150,12 @@ watch(
 )
 
 const progressPct = computed(() => simProgress.value)
+const batchProgressPct = computed(
+  () =>
+    activeBatchProgress.value.total === 0
+      ? 0
+      : Math.round((activeBatchProgress.value.done / activeBatchProgress.value.total) * 100),
+)
 
 onMounted(() => {
   // A return visit should start idle: don't re-show a previously finished image
@@ -207,6 +226,8 @@ async function generate(e?: MouseEvent) {
     errorMsg.value = '当前图片读取失败，请上传一张参考图后重试。'
     return
   }
+  const requestCount = normalizedBatchCount.value
+  batchCount.value = requestCount
   if (e) clickSpark(e)
   errorMsg.value = ''
   const effectivePrompt =
@@ -219,6 +240,7 @@ async function generate(e?: MouseEvent) {
       style: style.value,
       resolution: resolution.value,
       aspect_ratio: aspect.value,
+      count: requestCount,
       source_image: sourceImage,
       mask_image: maskImage,
     })
@@ -516,15 +538,38 @@ function applyPresetFromQuery(rawPresetId: unknown) {
 
         <!-- Energy Cost Estimation -->
         <div
-          class="mt-auto grad-border bg-surface-container p-4 rounded-xl flex justify-between items-center"
+          class="mt-auto grad-border bg-surface-container p-4 rounded-xl flex flex-col gap-3"
         >
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-secondary">flash_on</span>
-            <span class="font-mono text-micro text-on-surface-variant uppercase">能量消耗</span>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-secondary">flash_on</span>
+              <span class="font-mono text-micro text-on-surface-variant uppercase">能量消耗</span>
+            </div>
+            <span class="font-mono text-[11px] text-on-surface-variant uppercase">每次生成</span>
           </div>
-          <span class="font-display text-lg font-bold text-on-surface"
-            >−{{ cost }}<span class="text-on-surface-variant text-sm font-mono ml-1">CR</span></span
-          >
+          <div class="flex items-center justify-between gap-3">
+            <label class="font-mono text-micro text-on-surface-variant uppercase flex items-center gap-2">
+              <span class="material-symbols-outlined text-[16px]">filter_1</span>
+              生成数量
+            </label>
+            <input
+              v-model.number="batchCount"
+              type="number"
+              min="1"
+              :max="MAX_BATCH_COUNT"
+              class="w-20 px-2.5 py-1 rounded-md bg-surface-variant border border-outline-variant/40 text-on-surface text-right"
+              @change="batchCount = normalizeBatchCount(batchCount)"
+            />
+          </div>
+          <p class="font-mono text-[10px] text-on-surface-variant">
+            取值 1~{{ MAX_BATCH_COUNT }}，空值/非法会回退为 1；每次提交按“每张{{ cost }} CR”计费。
+          </p>
+          <div class="flex justify-between items-center">
+            <span class="font-mono text-micro text-on-surface-variant uppercase">本次预估</span>
+            <span class="font-display text-lg font-bold text-on-surface"
+              >−{{ estimatedCost }}<span class="text-on-surface-variant text-sm font-mono ml-1">CR</span></span
+            >
+          </div>
         </div>
       </div>
     </aside>
@@ -722,6 +767,26 @@ function applyPresetFromQuery(rawPresetId: unknown) {
       <div
         class="flex-1 glass-panel rounded-2xl overflow-hidden relative flex flex-col items-center justify-center min-h-[400px]"
       >
+        <!-- Batch progress -->
+        <div
+          v-if="activeBatchProgress.total > 1"
+          class="mb-4 w-full flex-shrink-0 grad-border bg-surface-container p-3 rounded-xl flex flex-col gap-2"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-micro text-on-surface-variant uppercase">本次批量进度</span>
+            <span class="font-mono text-micro text-primary">{{ batchProgressPct }}%</span>
+          </div>
+          <div class="w-full h-1.5 bg-surface-variant rounded-full overflow-hidden">
+            <div
+              class="h-full rounded-full bg-gradient-to-r from-secondary via-tertiary to-primary transition-all duration-500"
+              :style="{ width: `${batchProgressPct}%` }"
+            ></div>
+          </div>
+          <p class="font-mono text-[11px] text-on-surface-variant text-right">
+            已完成 {{ activeBatchProgress.done }} / {{ activeBatchProgress.total }} 张
+          </p>
+        </div>
+
         <!-- Background grid for Canvas Area -->
         <div
           class="absolute inset-0 opacity-[0.5]"
@@ -843,3 +908,4 @@ function applyPresetFromQuery(rawPresetId: unknown) {
     </section>
   </div>
 </template>
+

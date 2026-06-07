@@ -38,7 +38,7 @@ async function submit(e?: MouseEvent) {
     error.value =
       err?.response?.data?.error ||
       err?.message ||
-      (mode.value === 'login' ? '认证失败。' : '配额申请失败。')
+      (mode.value === 'login' ? '认证失败。' : '注册失败。')
   } finally {
     loading.value = false
   }
@@ -121,13 +121,13 @@ async function submit(e?: MouseEvent) {
                 ></span>
               </div>
               <h2 class="font-display text-2xl font-bold text-on-surface tracking-tight mb-2">
-                {{ mode === 'login' ? '初始化会话' : '申请新配额' }}
+                {{ mode === 'login' ? '登录' : '注册' }}
               </h2>
               <p class="text-on-surface-variant text-sm leading-relaxed">
                 {{
                   mode === 'login'
-                    ? '认证以访问 V3.5 生成引擎。'
-                    : '在 V3.5 引擎上申请新的操作员配额。'
+                    ? '登录以访问 V3.5 生成引擎。'
+                    : '注册后即可开始使用 V3.5 生成引擎。'
                 }}
               </p>
             </div>
@@ -234,14 +234,14 @@ async function submit(e?: MouseEvent) {
                     >progress_activity</span
                   >
                   <span v-else class="material-symbols-outlined text-[18px]">bolt</span>
-                  {{ mode === 'login' ? '初始化会话' : '申请新配额' }}
+                  {{ mode === 'login' ? '登录' : '注册' }}
                 </button>
                 <button
                   class="btn-ghost w-full"
                   type="button"
                   @click="setMode(mode === 'login' ? 'register' : 'login')"
                 >
-                  {{ mode === 'login' ? '申请新配额' : '初始化会话' }}
+                  {{ mode === 'login' ? '注册' : '登录' }}
                 </button>
               </div>
             </form>

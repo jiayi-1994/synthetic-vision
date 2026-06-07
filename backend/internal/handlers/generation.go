@@ -20,10 +20,10 @@ import (
 
 const maxGenerationUploadBytes = 10 << 20
 
-// CreateGeneration validates the request, deducts credits, and enqueues an
-// async render. Returns the freshly created (pending) generation.
+// CreateGeneration validates the request, deducts credits, and enqueues async
+// renders. Returns the freshly created generation(s) with 202 status.
 //
-//	POST /api/generations -> 202 generation
+//	POST /api/generations -> 202 {generations:[...]}
 //	402 {"error":"insufficient credits"} when the user is broke.
 func (h *Handler) CreateGeneration(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "multipart/form-data") {
@@ -49,6 +49,7 @@ func (h *Handler) CreateGeneration(w http.ResponseWriter, r *http.Request) {
 		Style:          req.Style,
 		Resolution:     req.Resolution,
 		AspectRatio:    req.AspectRatio,
+		Count:          req.Count,
 	})
 	if err != nil {
 		switch {
@@ -62,7 +63,7 @@ func (h *Handler) CreateGeneration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, gen)
+	writeJSON(w, http.StatusAccepted, map[string]any{"generations": gen})
 }
 
 func (h *Handler) createMultipartGeneration(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +76,11 @@ func (h *Handler) createMultipartGeneration(w http.ResponseWriter, r *http.Reque
 	prompt := strings.TrimSpace(r.FormValue("prompt"))
 	if prompt == "" {
 		writeError(w, http.StatusUnprocessableEntity, "prompt is required")
+		return
+	}
+	count, err := parseGenerationCount(r.FormValue("count"))
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid count")
 		return
 	}
 
@@ -103,6 +109,7 @@ func (h *Handler) createMultipartGeneration(w http.ResponseWriter, r *http.Reque
 		Style:          r.FormValue("style"),
 		Resolution:     r.FormValue("resolution"),
 		AspectRatio:    r.FormValue("aspect_ratio"),
+		Count:          count,
 		SourceImage:    sourceImage,
 		MaskImage:      maskImage,
 	})
@@ -118,7 +125,19 @@ func (h *Handler) createMultipartGeneration(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, gen)
+	writeJSON(w, http.StatusAccepted, map[string]any{"generations": gen})
+}
+
+func parseGenerationCount(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 1, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 func readGenerationUpload(r *http.Request, field string, allowed map[string]bool) (*service.UploadedImage, error) {

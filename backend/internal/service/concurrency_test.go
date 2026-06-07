@@ -117,7 +117,7 @@ func TestDoubleRefundGuard(t *testing.T) {
 	const cost = 15 // 2K
 	uid := seedTestUser(t, s, cost)
 
-	gen, err := s.CreateGeneration(uid, CreateGenInput{
+	gens, err := s.CreateGeneration(uid, CreateGenInput{
 		Prompt:      "refund",
 		Resolution:  "2K",
 		AspectRatio: "1:1",
@@ -131,7 +131,7 @@ func TestDoubleRefundGuard(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s.process(gen.ID)
+			s.process(gens[0].ID)
 		}()
 	}
 	wg.Wait()
@@ -153,9 +153,56 @@ func TestDoubleRefundGuard(t *testing.T) {
 	}
 
 	var g models.Generation
-	s.db.Where("id = ?", gen.ID).First(&g)
+	s.db.Where("id = ?", gens[0].ID).First(&g)
 	if g.Status != "failed" {
 		t.Errorf("expected status failed, got %q", g.Status)
+	}
+}
+
+func TestCreateGenerationSupportsBatchCount(t *testing.T) {
+	s := newTestService(t, failingProvider{})
+	uid := seedTestUser(t, s, 20)
+
+	gens, err := s.CreateGeneration(uid, CreateGenInput{
+		Prompt:      "batch test",
+		Resolution:  "1K",
+		AspectRatio: "1:1",
+		Count:       3,
+	})
+	if err != nil {
+		t.Fatalf("create generation: %v", err)
+	}
+	if len(gens) != 3 {
+		t.Fatalf("expected 3 generations, got %d", len(gens))
+	}
+
+	var u models.User
+	if err := s.db.Where("id = ?", uid).First(&u).Error; err != nil {
+		t.Fatalf("reload user: %v", err)
+	}
+	if u.Credits != 5 {
+		t.Fatalf("expected credits 5 after batch cost, got %d", u.Credits)
+	}
+
+	for i, g := range gens {
+		if g.Cost != 5 {
+			t.Fatalf("generation[%d] expected cost 5, got %d", i, g.Cost)
+		}
+	}
+}
+
+func TestCreateGenerationRejectsTooMany(t *testing.T) {
+	s := newTestService(t, failingProvider{})
+	uid := seedTestUser(t, s, 10000)
+
+	_, err := s.CreateGeneration(uid, CreateGenInput{
+		Prompt:      "too many",
+		Resolution:  "1K",
+		AspectRatio: "1:1",
+		Count:       9,
+	})
+	if !errors.Is(err, ErrInvalidParam) {
+		t.Fatalf("expected ErrInvalidParam, got %v", err)
 	}
 }
 
@@ -163,7 +210,7 @@ func TestCreateImageGenerationStoresSourceAsset(t *testing.T) {
 	s := newTestService(t, failingProvider{})
 	uid := seedTestUser(t, s, 20)
 
-	gen, err := s.CreateGeneration(uid, CreateGenInput{
+	gens, err := s.CreateGeneration(uid, CreateGenInput{
 		Mode:        "image",
 		Prompt:      "remix this frame",
 		Resolution:  "1K",
@@ -178,6 +225,7 @@ func TestCreateImageGenerationStoresSourceAsset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create image generation: %v", err)
 	}
+	gen := gens[0]
 	if gen.Mode != "image" || !gen.HasSourceImage || gen.SourceImagePath == "" {
 		t.Fatalf("source metadata mismatch: %+v", gen)
 	}

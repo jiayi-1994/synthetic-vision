@@ -20,6 +20,8 @@ import (
 	"syntheticvision/internal/provider"
 )
 
+const maxGenerationsPerRequest = 8
+
 // Sentinel errors returned by the service layer.
 var (
 	ErrInsufficientCredits = errors.New("insufficient credits")
@@ -35,6 +37,7 @@ type CreateGenInput struct {
 	Style          string
 	Resolution     string
 	AspectRatio    string
+	Count          int
 	SourceImage    *UploadedImage
 	MaskImage      *UploadedImage
 }
@@ -201,9 +204,9 @@ func evenInt(v float64) int {
 	return n
 }
 
-// CreateGeneration validates input, deducts cost atomically, creates a pending
-// Generation row, then enqueues it for async rendering.
-func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Generation, error) {
+// CreateGeneration validates input, deducts cost atomically, creates one or
+// multiple pending Generation rows, then enqueues them for async rendering.
+func (s *Service) CreateGeneration(userID string, in CreateGenInput) ([]*models.Generation, error) {
 	mode := normalizeMode(in.Mode)
 	if mode == "text" && in.SourceImage != nil {
 		mode = "image"
@@ -224,6 +227,20 @@ func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Ge
 	if cost < 0 {
 		return nil, ErrInvalidParam
 	}
+	count := in.Count
+	if count < 0 {
+		return nil, ErrInvalidParam
+	}
+	if count == 0 {
+		count = 1
+	}
+	if count > maxGenerationsPerRequest {
+		return nil, ErrInvalidParam
+	}
+	totalCost := cost * count
+	if totalCost <= 0 {
+		return nil, ErrInvalidParam
+	}
 	if !validAspect(in.AspectRatio) {
 		return nil, ErrInvalidParam
 	}
@@ -235,25 +252,8 @@ func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Ge
 		return nil, ErrInvalidParam
 	}
 
-	seed := time.Now().UnixNano() ^ int64(uuid.New().ID())
-	gen := &models.Generation{
-		ID:             uuid.NewString(),
-		UserID:         userID,
-		Mode:           mode,
-		Prompt:         in.Prompt,
-		NegativePrompt: in.NegativePrompt,
-		Resolution:     in.Resolution,
-		AspectRatio:    in.AspectRatio,
-		Style:          in.Style,
-		Width:          nw,
-		Height:         nh,
-		Seed:           seed,
-		Status:         "pending",
-		Cost:           cost,
-		HasSourceImage: in.SourceImage != nil,
-		HasMaskImage:   in.MaskImage != nil,
-		CreatedAt:      time.Now(),
-	}
+	startAt := time.Now()
+	created := make([]*models.Generation, 0, count)
 
 	var written []string
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -269,50 +269,75 @@ func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Ge
 			}
 			return err
 		}
-		if user.Credits < cost {
+		if user.Credits < totalCost {
 			return ErrInsufficientCredits
 		}
-		if err := tx.Model(&user).Update("credits", gorm.Expr("credits - ?", cost)).Error; err != nil {
+		if err := tx.Model(&user).Update("credits", gorm.Expr("credits - ?", totalCost)).Error; err != nil {
 			return err
 		}
 		txn := &models.CreditTransaction{
 			ID:        uuid.NewString(),
 			UserID:    userID,
-			Amount:    -cost,
+			Amount:    -totalCost,
 			Reason:    "generation",
 			CreatedAt: time.Now(),
 		}
 		if err := tx.Create(txn).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(gen).Error; err != nil {
-			return err
-		}
-		updates := map[string]any{}
-		if in.SourceImage != nil {
-			path, err := s.writeUploadedImage(gen.ID, "source", in.SourceImage)
-			if err != nil {
+		for i := 0; i < count; i++ {
+			seed := time.Now().UnixNano() ^ int64(uuid.New().ID())
+			if i > 0 {
+				seed += int64(i)
+			}
+			gen := &models.Generation{
+				ID:             uuid.NewString(),
+				UserID:         userID,
+				Mode:           mode,
+				Prompt:         in.Prompt,
+				NegativePrompt: in.NegativePrompt,
+				Resolution:     in.Resolution,
+				AspectRatio:    in.AspectRatio,
+				Style:          in.Style,
+				Width:          nw,
+				Height:         nh,
+				Seed:           seed,
+				Status:         "pending",
+				Cost:           cost,
+				HasSourceImage: in.SourceImage != nil,
+				HasMaskImage:   in.MaskImage != nil,
+				CreatedAt:      startAt,
+			}
+			if err := tx.Create(gen).Error; err != nil {
 				return err
 			}
-			written = append(written, path)
-			gen.SourceImagePath = path
-			updates["source_image_path"] = path
-			updates["has_source_image"] = true
-		}
-		if in.MaskImage != nil {
-			path, err := s.writeUploadedImage(gen.ID, "mask", in.MaskImage)
-			if err != nil {
-				return err
+			updates := map[string]any{}
+			if in.SourceImage != nil {
+				path, err := s.writeUploadedImage(gen.ID, "source", in.SourceImage)
+				if err != nil {
+					return err
+				}
+				written = append(written, path)
+				gen.SourceImagePath = path
+				updates["source_image_path"] = path
+				updates["has_source_image"] = true
 			}
-			written = append(written, path)
-			gen.MaskImagePath = path
-			updates["mask_image_path"] = path
-			updates["has_mask_image"] = true
-		}
-		if len(updates) > 0 {
-			if err := tx.Model(gen).Updates(updates).Error; err != nil {
-				return err
+			if in.MaskImage != nil {
+				path, err := s.writeUploadedImage(gen.ID, "mask", in.MaskImage)
+				if err != nil {
+					return err
+				}
+				written = append(written, path)
+				gen.MaskImagePath = path
+				updates["mask_image_path"] = path
+				updates["has_mask_image"] = true
 			}
+			if len(updates) > 0 {
+				if err := tx.Model(gen).Updates(updates).Error; err != nil {
+					return err
+				}
+			}
+			created = append(created, gen)
 		}
 		return nil
 	})
@@ -323,8 +348,10 @@ func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Ge
 		return nil, err
 	}
 
-	s.enqueue(gen.ID)
-	return gen, nil
+	for _, gen := range created {
+		s.enqueue(gen.ID)
+	}
+	return created, nil
 }
 
 // AdminInjectCredits adds amount credits to the user identified by public_id and

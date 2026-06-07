@@ -62,6 +62,7 @@ export interface CreateGenInput {
   style?: string
   resolution: Resolution
   aspect_ratio: AspectRatio
+  count?: number
   source_image?: File
   mask_image?: Blob | File
 }
