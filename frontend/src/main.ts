@@ -15,6 +15,9 @@ import 'material-symbols/outlined.css'
 import './style.css'
 import { reveal } from './directives/reveal'
 import { spotlight } from './directives/spotlight'
+import { initTheme } from './lib/theme'
+
+initTheme()
 
 const app = createApp(App)
 app.use(createPinia())

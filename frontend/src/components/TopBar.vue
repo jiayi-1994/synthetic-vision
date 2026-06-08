@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useGenerationsStore } from '../stores/generations'
 import { avatarUrl } from '../lib/format'
+import { useTheme } from '../lib/theme'
 import { useMagnet, clickSpark } from '../composables/useInteractions'
 
 const auth = useAuthStore()
@@ -13,6 +14,7 @@ const router = useRouter()
 const credits = computed(() => auth.user?.credits ?? 0)
 const avatar = computed(() => avatarUrl(auth.user?.avatar_seed ?? ''))
 const showNotifications = ref(false)
+const { activeTheme, cycleTheme } = useTheme()
 
 const genBtn = useMagnet(5)
 
@@ -83,6 +85,11 @@ function openGallery() {
   router.push('/gallery')
 }
 
+function toggleTheme(e: MouseEvent) {
+  clickSpark(e)
+  cycleTheme()
+}
+
 onMounted(() => {
   if (auth.isAuthenticated && gen.items.length === 0) {
     gen.fetchAll({ limit: 5 }).catch(() => {})
@@ -122,6 +129,16 @@ onMounted(() => {
           >{{ credits.toLocaleString('en-US') }} <span class="text-on-surface-variant">CR</span></span
         >
       </div>
+      <!-- Theme Toggle -->
+      <button
+        type="button"
+        class="hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/8 border border-outline-variant/25 hover:border-primary/35 transition-all active:scale-95"
+        :aria-label="`切换主题，当前：${activeTheme.label}`"
+        :title="`当前主题：${activeTheme.label}`"
+        @click="toggleTheme"
+      >
+        <span class="material-symbols-outlined text-[22px]">{{ activeTheme.icon }}</span>
+      </button>
       <!-- Notifications -->
       <div class="relative">
         <button

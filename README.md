@@ -10,8 +10,8 @@ pinned: false
 
 # Synthetic Vision
 
-> An AI **image generation and editing SaaS**, credit-based, wrapped in a dark glassmorphism UI
-> ("Midnight Spectrum"). A single self-contained Go binary serves both the REST
+> An AI **image generation and editing SaaS**, credit-based, wrapped in a
+> themeable glassmorphism UI ("Aurora Grid"). A single self-contained Go binary serves both the REST
 > API and the embedded Vue 3 single-page app. No external database or services
 > required — it ships with pure-Go SQLite and a built-in **mock image provider**,
 > so it runs end-to-end out of the box.
@@ -39,10 +39,10 @@ The UI is built to match the design references in [`_design/`](./_design)
 | **Admin** | `/admin` | *(admins only)* **User Directory** table with backend-backed search/pagination, credit pills, a **Manual Credit Injection** form (top up any user by their `public_id`), and a **Compute Cluster** status card. |
 | **Marketplace** | `/marketplace` | Curated preset browser with reusable templates, quick **Apply** to prefill Dashboard settings, and no backend commerce dependencies. |
 | **Analytics** | `/analytics` | Personal dashboard aggregating generation counts, success rate, resolution/aspect distribution, refunds/spend trends, and recent activity. |
-| **Settings** | `/settings` | Local workspace preferences for default mode/resolution/aspect/style, compact Gallery layout, and an upgrade/credits explainer. |
+| **Settings** | `/settings` | Local workspace preferences for default mode/resolution/aspect/style, theme selection, compact Gallery layout, and an upgrade/credits explainer. |
 | **Support** | `/support` | Operator-facing help and troubleshooting runbook for generation, edits, queue status, and credits. |
 
-> The formerly decorative shell actions are wired: Sidebar Upgrade/Help/Settings open real surfaces, and the top-bar notification bell shows recent generation job events.
+> The formerly decorative shell actions are wired: Sidebar Upgrade/Help/Settings open real surfaces, the top-bar notification bell shows recent generation job events, and the top bar includes a quick theme toggle.
 
 ---
 

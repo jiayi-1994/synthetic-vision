@@ -1,6 +1,6 @@
 # Synthetic Vision — Build Spec (single source of truth)
 
-> AI image generation/editing SaaS. Credit-based. Dark glassmorphism UI ("Midnight Spectrum").
+> AI image generation/editing SaaS. Credit-based. Themeable glassmorphism UI ("Aurora Grid").
 > Backend: **Go 1.24** (chi + GORM + pure-Go SQLite). Frontend: **Vue 3 + TS + Vite + Pinia + Tailwind 3 + axios**.
 > Design reference: `_design/*.html` (exact Stitch Tailwind markup) and `_design/*.png` (screenshots).
 > **Every agent MUST read this whole file and match the names/shapes EXACTLY. Cross-file calls only work if signatures match this spec verbatim.**
@@ -60,6 +60,8 @@ Project root: `F:\other code\sub2api-hf\synthetic-vision\` (referred to below as
       ├─ stores/auth.ts              (FE-CORE)
       ├─ stores/generations.ts       (FE-CORE)
       ├─ lib/format.ts               (FE-CORE)  relative-time + cost helpers
+      ├─ lib/preferences.ts          (FE-CORE)  local workspace/theme preferences
+      ├─ lib/theme.ts                (FE-CORE)  runtime CSS-variable theme manager
       ├─ components/AppShell.vue      (FE-CORE)
       ├─ components/Sidebar.vue       (FE-CORE)
       ├─ components/TopBar.vue        (FE-CORE)
@@ -75,40 +77,36 @@ Project root: `F:\other code\sub2api-hf\synthetic-vision\` (referred to below as
 
 ---
 
-## 1. Design tokens (use VERBATIM in tailwind.config.js and Go where noted)
+## 1. Design tokens (runtime themed)
 
-Colors (Tailwind custom colors, hex):
-```
-primary #d2bbff   on-primary #3f008e   primary-container #7c3aed   on-primary-container #ede0ff
-primary-fixed #eaddff   primary-fixed-dim #d2bbff   on-primary-fixed #25005a   on-primary-fixed-variant #5a00c6
-inverse-primary #732ee4   surface-tint #d2bbff
-secondary #89ceff   on-secondary #00344d   secondary-container #00a2e6   on-secondary-container #00344e
-secondary-fixed #c9e6ff   secondary-fixed-dim #89ceff   on-secondary-fixed #001e2f   on-secondary-fixed-variant #004c6e
-tertiary #ffb784   on-tertiary #4f2500   tertiary-container #a15100   on-tertiary-container #ffe0cd
-tertiary-fixed #ffdcc6   tertiary-fixed-dim #ffb784   on-tertiary-fixed #301400   on-tertiary-fixed-variant #713700
-error #ffb4ab   on-error #690005   error-container #93000a   on-error-container #ffdad6
-background #0b1326   on-background #dae2fd
-surface #0b1326   surface-dim #0b1326   surface-bright #31394d   on-surface #dae2fd   on-surface-variant #ccc3d8
-surface-container-lowest #060e20   surface-container-low #131b2e   surface-container #171f33
-surface-container-high #222a3d   surface-container-highest #2d3449   surface-variant #2d3449
-outline #958da1   outline-variant #4a4455   inverse-surface #dae2fd   inverse-on-surface #283044
-```
+Tailwind semantic color names are stable, but their values are CSS variables
+defined in `frontend/src/style.css` so the app can switch themes at runtime.
+Supported themes: `aurora` (default dark neon), `daybreak` (light glass), and
+`contrast` (high contrast). `frontend/src/lib/theme.ts` owns the theme ids,
+labels, and `document.documentElement.dataset.theme` application.
+
+The base variables are:
+`--void`, `--bg`, `--surface-1`, `--surface-2`, `--surface-3`, `--cyan`,
+`--cyan-rgb`, `--cyan-deep`, `--magenta`, `--magenta-rgb`,
+`--magenta-deep`, `--violet`, `--violet-rgb`, `--text-hi`, `--text`,
+`--text-dim`, `--text-faint`, `--surface-glass`, `--success`, `--warning`,
+`--error`, `--error-rgb`, `--outline-rgb`, `--outline-variant-rgb`,
+`--grad-neon`, `--grad-text`, `--glow-cyan`, and `--glow-magenta`.
+
+Tailwind color entries in `tailwind.config.js` must point to these variables
+using `rgb(var(--token-rgb) / <alpha-value>)`; do not reintroduce fixed hex
+colors for semantic tokens.
+
 borderRadius: `DEFAULT 0.25rem`, `lg 0.5rem`, `xl 0.75rem`, `full 9999px` (KEEP only these — Stitch overrides default scale).
 spacing extras: `margin-lg 40px`, `margin-sm 16px`, `gutter 24px`, `unit 4px`, `container-max 1440px`.
 fontFamily: `display-lg/body-md/headline-lg/headline-lg-mobile ["Inter"]`, `label-sm ["JetBrains Mono"]`.
 fontSize: `display-lg [48px,{lineHeight 1.1,letterSpacing -0.02em,fontWeight 700}]`, `headline-lg [32px,{1.2,-0.01em,600}]`, `headline-lg-mobile [24px,{1.2,_,600}]`, `body-md [16px,{1.6,_,400}]`, `label-sm [12px,{1.0,0.05em,500}]`.
 darkMode: `"class"`. `<html class="dark">`.
 
-Global CSS (style.css) — copy these utilities exactly (from `_design`):
-```css
-body { background-color:#020617; color:#dae2fd; }
-.glass-panel { background-color:rgba(30,41,59,0.6); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(51,65,85,0.5); }
-.glow-shadow { box-shadow:0 8px 32px rgba(124,58,237,0.15); }
-.glow-hover:hover { box-shadow:0 8px 32px rgba(124,58,237,0.15); border-color:rgba(210,187,255,0.3); }
-::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#4a4455;border-radius:4px} ::-webkit-scrollbar-thumb:hover{background:#958da1}
-.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24}
-```
+Global CSS (`style.css`) owns the ambient backdrop, grid floor, glass panel,
+button, field, gradient text, reveal, spotlight, scrollbar, and reduced-motion
+utilities. These utilities must read from CSS variables so theme changes affect
+the whole app without rebuilding.
 Fonts + icons: `index.html` `<head>` includes the Google Fonts links from `_design/login.html` lines 8–13 (Material Symbols Outlined, Inter 400;600;700, JetBrains Mono 500). Add `@tailwind base/components/utilities` in style.css.
 
 Icons: Material Symbols Outlined `<span class="material-symbols-outlined">name</span>`. Nav icons: Dashboard `auto_awesome`, Gallery `grid_view`, Marketplace `storefront`, Admin `admin_panel_settings`, Analytics `insights`, Support `help_outline`, Settings `settings`.
@@ -447,7 +445,7 @@ AppShell wraps authed views (sidebar + topbar + `<router-view>` in content). Log
 ### Components
 - **AppShell.vue**: flex layout. Fixed `Sidebar` (w-72) + `TopBar` (h-16) + scrollable `<main>` with `<slot/>` or `<router-view/>`. Matches `_design/dashboard.html` shell. Mobile: sidebar hidden (`hidden md:flex`).
 - **Sidebar.vue**: brand block (auto_awesome in primary-container rounded, "Synthetic Vision" / "V3.5 Engine"), nav links (router-link active = `bg-primary-container text-on-primary-container font-bold`), Admin link only if `auth.isAdmin`, footer Upgrade → `/settings?section=billing`, Support → `/support`, Settings → `/settings`, Logout (calls auth.logout → /login). Use exact classes from `_design`.
-- **TopBar.vue**: right side — credits pill (`{{auth.user?.credits}} Credits`, secondary pulse dot), notifications icon with recent generation job dropdown, avatar (avatarUrl), **Generate** button (router push `/`). Use design classes.
+- **TopBar.vue**: right side — credits pill (`{{auth.user?.credits}} Credits`, secondary pulse dot), quick theme toggle (cycles `aurora` → `daybreak` → `contrast`), notifications icon with recent generation job dropdown, avatar (avatarUrl), **Generate** button (router push `/`). Use design classes.
 - **ImageCard.vue** (FE-VIEWS): props `gen:Generation`. aspect `aspect-[4/5]`, `glass-panel glow-hover`, img `image_url`, hover overlay with `WxH • relativeTime`, truncated prompt, Download + Delete buttons (emit `delete`). Exactly per `_design/gallery.html` card.
 
 ### Views (FE-VIEWS) — match `_design/*.html` fidelity
@@ -457,7 +455,7 @@ AppShell wraps authed views (sidebar + topbar + `<router-view>` in content). Log
 - **Admin.vue**: page title "User Directory". 12-col bento: left (col-span-8) glass table of `AdminAPI.users` (avatar initials chip, username/public_id, email, credits pill colored by amount: 0→error, low→secondary, high→primary, Recharge button prefills the form) plus backend-backed search over username/email/public_id. Footer "Showing 1-N of total" + pager. Right (col-span-4): "Manual Credit Injection" form (target_public_id + amount → AdminAPI.inject → refresh table + toast), "Compute Cluster" status card from AdminAPI.cluster. Per `_design/admin.html`.
 - **Marketplace.vue**: static preset browser with category filtering, recommendation cards (title/description/tags/metadata), and preset application flow to Dashboard via query handoff.
 - **Analytics.vue**: personal analytics dashboard using `/api/me/analytics`, including summary cards, status/resolution/aspect distributions, and recent generation activity; handles loading/error/empty states without placeholders.
-- **Settings.vue**: local workspace preferences persisted in `localStorage` for default Dashboard mode/resolution/aspect/style, compact Gallery layout, and billing/upgrade guidance.
+- **Settings.vue**: local workspace preferences persisted in `localStorage` for default Dashboard mode/resolution/aspect/style, theme selection with immediate preview, compact Gallery layout, and billing/upgrade guidance.
 - **Support.vue**: authenticated help surface with generation/editing/credit troubleshooting and links back to Dashboard/Analytics.
 
 ### main.ts

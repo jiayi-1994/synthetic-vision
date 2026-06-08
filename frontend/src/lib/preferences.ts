@@ -2,9 +2,12 @@ import type { AspectRatio, GenerationMode, Resolution } from '@/types'
 
 const STORAGE_KEY = 'sv_workspace_preferences'
 
+export type ThemeId = 'aurora' | 'daybreak' | 'contrast'
+
 const modes: GenerationMode[] = ['text', 'image', 'edit']
 const resolutions: Resolution[] = ['1K', '2K', '4K']
 const aspects: AspectRatio[] = ['1:1', '4:3', '16:9', '9:16']
+const themes: ThemeId[] = ['aurora', 'daybreak', 'contrast']
 
 export interface WorkspacePreferences {
   defaultMode: GenerationMode
@@ -13,6 +16,7 @@ export interface WorkspacePreferences {
   defaultStyle: string
   compactGallery: boolean
   emailDigest: boolean
+  theme: ThemeId
 }
 
 export const defaultWorkspacePreferences: WorkspacePreferences = {
@@ -22,6 +26,7 @@ export const defaultWorkspacePreferences: WorkspacePreferences = {
   defaultStyle: 'Cinematic',
   compactGallery: false,
   emailDigest: false,
+  theme: 'aurora',
 }
 
 function isGenerationMode(value: unknown): value is GenerationMode {
@@ -34,6 +39,10 @@ function isResolution(value: unknown): value is Resolution {
 
 function isAspectRatio(value: unknown): value is AspectRatio {
   return typeof value === 'string' && aspects.includes(value as AspectRatio)
+}
+
+function isTheme(value: unknown): value is ThemeId {
+  return typeof value === 'string' && themes.includes(value as ThemeId)
 }
 
 export function loadWorkspacePreferences(): WorkspacePreferences {
@@ -63,6 +72,7 @@ export function loadWorkspacePreferences(): WorkspacePreferences {
           : defaultWorkspacePreferences.defaultStyle,
       compactGallery: parsed.compactGallery === true,
       emailDigest: parsed.emailDigest === true,
+      theme: isTheme(parsed.theme) ? parsed.theme : defaultWorkspacePreferences.theme,
     }
   } catch {
     return { ...defaultWorkspacePreferences }

@@ -6,8 +6,10 @@ import {
   defaultWorkspacePreferences,
   loadWorkspacePreferences,
   saveWorkspacePreferences,
+  type ThemeId,
   type WorkspacePreferences,
 } from '@/lib/preferences'
+import { previewTheme, themeOptions } from '@/lib/theme'
 import type { GenerationMode } from '@/types'
 
 const router = useRouter()
@@ -48,10 +50,12 @@ function apply(next: WorkspacePreferences) {
   prefs.defaultStyle = next.defaultStyle
   prefs.compactGallery = next.compactGallery
   prefs.emailDigest = next.emailDigest
+  prefs.theme = next.theme
 }
 
 function save() {
   saveWorkspacePreferences({ ...prefs })
+  previewTheme(prefs.theme)
   saved.value = true
   if (savedTimer) clearTimeout(savedTimer)
   savedTimer = setTimeout(() => (saved.value = false), 2600)
@@ -66,8 +70,14 @@ function goDashboard() {
   router.push('/')
 }
 
+function selectTheme(theme: ThemeId) {
+  prefs.theme = theme
+  previewTheme(theme)
+}
+
 onMounted(() => {
   apply(loadWorkspacePreferences())
+  previewTheme(prefs.theme)
 })
 </script>
 
@@ -180,6 +190,46 @@ onMounted(() => {
         </article>
 
         <aside class="xl:col-span-4 space-y-6">
+          <article v-reveal="40" class="glass-panel rounded-2xl p-6 space-y-5">
+            <div>
+              <p class="font-mono text-micro text-on-surface-variant uppercase">主题 · THEME</p>
+              <h2 class="font-display text-title font-bold text-on-surface mt-2 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-[20px]">palette</span>
+                外观主题
+              </h2>
+              <p class="text-sm text-on-surface-variant mt-2">
+                主题会立即预览，点击保存后写入当前浏览器偏好。
+              </p>
+            </div>
+
+            <div class="space-y-3">
+              <button
+                v-for="theme in themeOptions"
+                :key="theme.id"
+                type="button"
+                class="w-full text-left rounded-xl border p-4 transition-all flex items-center gap-3"
+                :class="
+                  prefs.theme === theme.id
+                    ? 'border-primary/60 bg-primary/10 text-on-surface shadow-[0_0_22px_rgba(56,232,255,0.14)]'
+                    : 'border-outline-variant/35 bg-surface-container/45 text-on-surface-variant hover:border-primary/40 hover:text-on-surface'
+                "
+                @click="selectTheme(theme.id)"
+              >
+                <span
+                  class="h-11 w-11 rounded-xl bg-gradient-to-br border border-outline-variant/30 flex-shrink-0"
+                  :class="theme.preview"
+                ></span>
+                <span class="min-w-0">
+                  <span class="flex items-center gap-2 font-display font-bold">
+                    <span class="material-symbols-outlined text-[18px] text-primary">{{ theme.icon }}</span>
+                    {{ theme.label }}
+                  </span>
+                  <span class="block mt-1 font-mono text-[10px] leading-relaxed">{{ theme.helper }}</span>
+                </span>
+              </button>
+            </div>
+          </article>
+
           <article
             v-reveal="60"
             class="grad-border glass-panel rounded-2xl p-6 space-y-4"
@@ -224,7 +274,7 @@ onMounted(() => {
             </h2>
 
             <label class="flex items-start gap-3 rounded-xl border border-outline-variant/30 bg-surface-container/40 p-4">
-              <input v-model="prefs.compactGallery" type="checkbox" class="mt-1 accent-cyan-300" />
+              <input v-model="prefs.compactGallery" type="checkbox" class="mt-1 accent-primary" />
               <span>
                 <span class="block font-display text-on-surface font-semibold">紧凑作品库</span>
                 <span class="block font-mono text-[11px] text-on-surface-variant mt-1">
@@ -234,7 +284,7 @@ onMounted(() => {
             </label>
 
             <label class="flex items-start gap-3 rounded-xl border border-outline-variant/30 bg-surface-container/40 p-4">
-              <input v-model="prefs.emailDigest" type="checkbox" class="mt-1 accent-cyan-300" />
+              <input v-model="prefs.emailDigest" type="checkbox" class="mt-1 accent-primary" />
               <span>
                 <span class="block font-display text-on-surface font-semibold">邮件摘要提示</span>
                 <span class="block font-mono text-[11px] text-on-surface-variant mt-1">
