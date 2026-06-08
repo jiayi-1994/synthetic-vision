@@ -34,6 +34,7 @@ function showToast(msg: string, kind: 'success' | 'error') {
 const rangeStart = computed(() => (total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1))
 const rangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const hasSearch = computed(() => search.value.trim() !== '')
 
 function fmt(n: number): string {
   return n.toLocaleString('en-US')
@@ -84,6 +85,16 @@ async function loadCluster() {
 function prefillRecharge(u: AdminUser) {
   form.target_public_id = u.public_id
   formError.value = ''
+}
+
+function applySearch() {
+  page.value = 1
+  loadUsers()
+}
+
+function clearSearch() {
+  search.value = ''
+  applySearch()
 }
 
 function goPrev() {
@@ -160,19 +171,49 @@ onMounted(() => {
           class="xl:col-span-8 glass-panel rounded-2xl overflow-hidden flex flex-col"
         >
           <div
-            class="p-6 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container/50"
+            class="p-6 border-b border-outline-variant/20 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-surface-container/50"
           >
             <h3 class="font-display font-bold text-title flex items-center gap-2 text-on-surface">
               <span class="material-symbols-outlined text-primary text-[20px]">group</span>
               活跃用户
               <span class="font-mono text-micro text-on-surface-variant uppercase ml-1">DIRECTORY</span>
             </h3>
-            <button
-              type="button"
-              class="min-h-[40px] px-3 rounded-lg border border-outline-variant/50 text-on-surface-variant font-mono text-[11px] uppercase hover:border-primary/40 hover:text-primary transition-colors flex items-center gap-1.5"
-            >
-              <span class="material-symbols-outlined text-[16px]">filter_list</span> 筛选
-            </button>
+            <form class="flex flex-col sm:flex-row gap-2 sm:items-center" @submit.prevent="applySearch">
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">search</span>
+                <input
+                  v-model="search"
+                  class="field pl-10 !py-2.5 font-mono text-[12px] w-full sm:w-72"
+                  placeholder="搜索用户名 / 邮箱 / 用户 ID"
+                  type="search"
+                />
+              </div>
+              <button
+                type="submit"
+                class="min-h-[40px] px-3 rounded-lg border border-outline-variant/50 text-on-surface-variant font-mono text-[11px] uppercase hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span class="material-symbols-outlined text-[16px]">filter_list</span> 搜索
+              </button>
+              <button
+                v-if="hasSearch"
+                type="button"
+                class="min-h-[40px] px-3 rounded-lg border border-outline-variant/50 text-on-surface-variant font-mono text-[11px] uppercase hover:border-secondary/40 hover:text-secondary transition-colors"
+                @click="clearSearch"
+              >
+                清空
+              </button>
+            </form>
+          </div>
+
+          <div
+            v-if="hasSearch"
+            class="px-6 py-3 border-b border-outline-variant/20 bg-primary/5 font-mono text-[11px] text-on-surface-variant flex flex-wrap items-center gap-2"
+          >
+            <span class="uppercase">SEARCH</span>
+            <span class="px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/25">
+              “{{ search.trim() }}”
+            </span>
+            <span>匹配 {{ fmt(total) }} 个用户</span>
           </div>
 
           <div class="overflow-x-auto">

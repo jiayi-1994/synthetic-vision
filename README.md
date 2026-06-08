@@ -26,7 +26,7 @@ pinned: false
 
 ---
 
-## The six routes
+## Main product routes
 
 The UI is built to match the design references in [`_design/`](./_design)
 (`*.html` Tailwind markup + `*.png` screenshots).
@@ -35,12 +35,14 @@ The UI is built to match the design references in [`_design/`](./_design)
 |---|---|---|
 | **Login / Register** | `/login` | Atmospheric glass card. Toggles between *Initialize Session* (login) and *Request New Allocation* (register). New accounts get a **1,250-credit** signup bonus. |
 | **Dashboard** | `/` | The generation/editing workspace. Left panel: **Generation Parameters** plus mode switch (**文生图 / 图生图 / 局部修图**), resolution, aspect, and live **Energy Cost**. Right: prompt editor, reference image upload, lightweight mask brush for local edits, and the **Canvas** that shows the source preview, progress state, then the finished image. |
-| **Gallery** | `/gallery` | Profile header (avatar, plan, total generations, credit balance from `/api/me/stats`) plus a **Recent Output** grid of your completed images, with download and delete. |
-| **Admin** | `/admin` | *(admins only)* **User Directory** table with credit pills, a **Manual Credit Injection** form (top up any user by their `public_id`), and a **Compute Cluster** status card. |
+| **Gallery** | `/gallery` | Profile header (avatar, plan, total generations, credit balance from `/api/me/stats`) plus a **Recent Output** grid of your completed images, with download/delete and real filters for prompt, mode, resolution, and aspect ratio. |
+| **Admin** | `/admin` | *(admins only)* **User Directory** table with backend-backed search/pagination, credit pills, a **Manual Credit Injection** form (top up any user by their `public_id`), and a **Compute Cluster** status card. |
 | **Marketplace** | `/marketplace` | Curated preset browser with reusable templates, quick **Apply** to prefill Dashboard settings, and no backend commerce dependencies. |
 | **Analytics** | `/analytics` | Personal dashboard aggregating generation counts, success rate, resolution/aspect distribution, refunds/spend trends, and recent activity. |
+| **Settings** | `/settings` | Local workspace preferences for default mode/resolution/aspect/style, compact Gallery layout, and an upgrade/credits explainer. |
+| **Support** | `/support` | Operator-facing help and troubleshooting runbook for generation, edits, queue status, and credits. |
 
-> All six routes now have functional front-end surfaces; `/marketplace` is a curated static preset catalog and `/analytics` shows personal usage metrics from `/api/me/analytics`.
+> The formerly decorative shell actions are wired: Sidebar Upgrade/Help/Settings open real surfaces, and the top-bar notification bell shows recent generation job events.
 
 ---
 

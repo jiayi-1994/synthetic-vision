@@ -263,9 +263,9 @@ func (s *Service) Stop()
 // CreateGeneration: validates resolution∈{1K,2K,4K}, aspect∈{1:1,4:3,16:9,9:16}; computes cost+dims+seed;
 // in a db transaction: load user FOR UPDATE-ish, ensure Credits>=cost, decrement, write CreditTransaction(reason "generation", -cost),
 // create Generation(status "pending"); then enqueue id; returns the Generation (or ErrInsufficientCredits).
-func (s *Service) CreateGeneration(userID string, in CreateGenInput) (*models.Generation, error)
+func (s *Service) CreateGeneration(userID string, in CreateGenInput) ([]*models.Generation, error)
 type UploadedImage struct { Data []byte; MimeType, Extension, Filename string }
-type CreateGenInput struct { Mode, Prompt, NegativePrompt, Style, Resolution, AspectRatio string; SourceImage, MaskImage *UploadedImage }
+type CreateGenInput struct { Mode, Prompt, NegativePrompt, Style, Resolution, AspectRatio string; Count int; SourceImage, MaskImage *UploadedImage }
 var ErrInsufficientCredits = errors.New("insufficient credits")
 var ErrInvalidParam = errors.New("invalid parameter")
 func CostFor(resolution string) int        // 1K→5,2K→15,4K→40; unknown→ -1
@@ -364,12 +364,12 @@ export type AspectRatio = '1:1'|'4:3'|'16:9'|'9:16'
 export interface Generation { id:string; mode:GenerationMode; prompt:string; negative_prompt:string; resolution:Resolution; aspect_ratio:AspectRatio; style:string; width:number; height:number; seed:number; status:GenStatus; cost:number; image_url:string; has_source_image:boolean; has_mask_image:boolean; error:string; created_at:string; completed_at:string|null }
 export interface AdminUser { public_id:string; username:string; email:string; credits:number; role:string; plan:string; last_activity_at:string; initials:string; created_at:string }
 export interface Stats { user:User; total_generations:number; completed_generations:number; credit_balance:number }
-export interface CreateGenInput { mode?:GenerationMode; prompt:string; negative_prompt?:string; style?:string; resolution:Resolution; aspect_ratio:AspectRatio; source_image?:File; mask_image?:Blob|File }
+export interface CreateGenInput { mode?:GenerationMode; prompt:string; negative_prompt?:string; style?:string; resolution:Resolution; aspect_ratio:AspectRatio; count?:number; source_image?:File; mask_image?:Blob|File }
 
 export interface AnalyticsDistributionItem { label:string; count:number; percentage:number }
 export interface AnalyticsSummary { total_generations:number; completed_generations:number; failed_generations:number; pending_generations:number; processing_generations:number; success_rate:number; credits_spent:number; credits_refunded:number; credit_balance:number }
 export interface AnalyticsCreditBreakdown { generation_debits:number; refunds:number; admin_topups:number; signup_bonus:number }
-export interface AnalyticsRecentGeneration { id:string; prompt:string; status:GenStatus; resolution:Resolution; aspect_ratio:AspectRatio; cost:number; error:string; created_at:string; completed_at:string|null }
+export interface AnalyticsRecentGeneration { id:string; mode:GenerationMode; prompt:string; status:GenStatus; resolution:Resolution; aspect_ratio:AspectRatio; cost:number; error:string; created_at:string; completed_at:string|null }
 export interface AnalyticsResponse { user:User; summary:AnalyticsSummary; status_distribution:AnalyticsDistributionItem[]; resolution_distribution:AnalyticsDistributionItem[]; aspect_ratio_distribution:AnalyticsDistributionItem[]; credit_breakdown:AnalyticsCreditBreakdown; recent_generations:AnalyticsRecentGeneration[] }
 
 export type PresetCategory = 'photoreal'|'illustration'|'abstract'|'product'|'retro'|'portrait'
@@ -389,7 +389,7 @@ export const AuthAPI = {
 }
 export const GenAPI = {
   cost(resolution:Resolution): Promise<number>          // unwraps {cost}
-  create(input:CreateGenInput): Promise<Generation>
+  create(input:CreateGenInput): Promise<Generation[]>
   list(params?:{status?:GenStatus;limit?:number}): Promise<Generation[]>  // unwraps {generations}
   get(id:string): Promise<Generation>
   remove(id:string): Promise<void>
@@ -439,22 +439,26 @@ Routes (createWebHistory):
 - `/admin` → Admin (auth + admin; else redirect `/`)
 - `/marketplace` → Marketplace (auth)
 - `/analytics` → Analytics (auth)
+- `/settings` → Settings (auth)
+- `/support` → Support (auth)
 beforeEach guard: if route needs auth and `!auth.isAuthenticated` → `/login`; if needs admin and `!isAdmin` → `/`. On first load with token but no user, call `fetchMe()`.
 AppShell wraps authed views (sidebar + topbar + `<router-view>` in content). Login renders standalone (no shell).
 
 ### Components
 - **AppShell.vue**: flex layout. Fixed `Sidebar` (w-72) + `TopBar` (h-16) + scrollable `<main>` with `<slot/>` or `<router-view/>`. Matches `_design/dashboard.html` shell. Mobile: sidebar hidden (`hidden md:flex`).
-- **Sidebar.vue**: brand block (auto_awesome in primary-container rounded, "Synthetic Vision" / "V3.5 Engine"), nav links (router-link active = `bg-primary-container text-on-primary-container font-bold`), Admin link only if `auth.isAdmin`, footer Upgrade/Support/Settings, Logout (calls auth.logout → /login). Use exact classes from `_design`.
-- **TopBar.vue**: right side — credits pill (`{{auth.user?.credits}} Credits`, secondary pulse dot), notifications icon, avatar (avatarUrl), **Generate** button (router push `/`). Use design classes.
+- **Sidebar.vue**: brand block (auto_awesome in primary-container rounded, "Synthetic Vision" / "V3.5 Engine"), nav links (router-link active = `bg-primary-container text-on-primary-container font-bold`), Admin link only if `auth.isAdmin`, footer Upgrade → `/settings?section=billing`, Support → `/support`, Settings → `/settings`, Logout (calls auth.logout → /login). Use exact classes from `_design`.
+- **TopBar.vue**: right side — credits pill (`{{auth.user?.credits}} Credits`, secondary pulse dot), notifications icon with recent generation job dropdown, avatar (avatarUrl), **Generate** button (router push `/`). Use design classes.
 - **ImageCard.vue** (FE-VIEWS): props `gen:Generation`. aspect `aspect-[4/5]`, `glass-panel glow-hover`, img `image_url`, hover overlay with `WxH • relativeTime`, truncated prompt, Download + Delete buttons (emit `delete`). Exactly per `_design/gallery.html` card.
 
 ### Views (FE-VIEWS) — match `_design/*.html` fidelity
 - **Login.vue**: standalone. Atmospheric bg (glows + radial). Glass card. Toggle **Login ⇄ Register** ("Initialize Session" / "Request New Allocation"). Login form: email + access key. Register adds username. On submit → auth store → on success `router.push('/')`. Show error text on failure. Use `_design/login.html` markup.
 - **Dashboard.vue**: 2-col workspace. Left `aside` (320px) glass "Generation Parameters": Resolution segmented (1K/2K/4K), Aspect ratio 2×2 grid (icon boxes per design), Energy Cost footer = `COSTS[resolution]` (live). Right: prompt glass textarea + toolbar (style chip = "Cinematic") + Generate button; below, Canvas glass panel showing: idle placeholder (radial dot bg) / synthesizing state (spinner ring + "Synthesizing Vision" + progress bar, from `gen.active`) / completed image. Generate calls `gen.create(input)`; disable while active pending/processing; if 402 show "Insufficient credits" toast/inline. After completion the image shows in canvas; credits pill updates.
-- **Gallery.vue**: Profile header (avatar, username, plan "Pro/Free Member", Total Generations stat, Credit Balance stat from `/me/stats`). "Recent Output" grid of `ImageCard` over `gen.completed`. Filter button (visual). Delete removes via store. Empty state when none.
-- **Admin.vue**: page title "User Directory". 12-col bento: left (col-span-8) glass table of `AdminAPI.users` (avatar initials chip, username/public_id, email, credits pill colored by amount: 0→error, low→secondary, high→primary, Recharge button prefills the form). Footer "Showing 1-N of total" + pager. Right (col-span-4): "Manual Credit Injection" form (target_public_id + amount → AdminAPI.inject → refresh table + toast), "Compute Cluster" status card from AdminAPI.cluster. Per `_design/admin.html`.
+- **Gallery.vue**: Profile header (avatar, username, plan "Pro/Free Member", Total Generations stat, Credit Balance stat from `/me/stats`). "Recent Output" grid of `ImageCard` over `gen.completed`. Filters by prompt text, generation mode, resolution, and aspect ratio. Delete removes via store. Empty state when none or when filters match nothing.
+- **Admin.vue**: page title "User Directory". 12-col bento: left (col-span-8) glass table of `AdminAPI.users` (avatar initials chip, username/public_id, email, credits pill colored by amount: 0→error, low→secondary, high→primary, Recharge button prefills the form) plus backend-backed search over username/email/public_id. Footer "Showing 1-N of total" + pager. Right (col-span-4): "Manual Credit Injection" form (target_public_id + amount → AdminAPI.inject → refresh table + toast), "Compute Cluster" status card from AdminAPI.cluster. Per `_design/admin.html`.
 - **Marketplace.vue**: static preset browser with category filtering, recommendation cards (title/description/tags/metadata), and preset application flow to Dashboard via query handoff.
 - **Analytics.vue**: personal analytics dashboard using `/api/me/analytics`, including summary cards, status/resolution/aspect distributions, and recent generation activity; handles loading/error/empty states without placeholders.
+- **Settings.vue**: local workspace preferences persisted in `localStorage` for default Dashboard mode/resolution/aspect/style, compact Gallery layout, and billing/upgrade guidance.
+- **Support.vue**: authenticated help surface with generation/editing/credit troubleshooting and links back to Dashboard/Analytics.
 
 ### main.ts
 createApp(App) + pinia + router; import './style.css'. App.vue: `<router-view/>` only (shell handled per-route or App decides shell vs login by route meta). Simplest: AppShell used inside each authed view OR App.vue checks `route.meta.shell`. **Decision: App.vue renders `<RouterView/>`; authed views import and wrap with `<AppShell>`** — NO, to avoid repetition: App.vue checks `route.meta.public`; if public → `<RouterView/>`, else `<AppShell><RouterView/></AppShell>`. FE-CORE implements this in App.vue; set `meta.public:true` on /login.

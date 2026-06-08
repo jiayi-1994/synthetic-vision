@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useGenerationsStore } from '@/stores/generations'
 import { COSTS, RESOLUTIONS, ASPECTS } from '@/lib/format'
 import { getPresetById } from '@/lib/presets'
+import { loadWorkspacePreferences } from '@/lib/preferences'
 import { useMagnet, clickSpark } from '@/composables/useInteractions'
 import type { Resolution, AspectRatio, GenerationMode, Preset } from '@/types'
 
@@ -35,6 +36,7 @@ const router = useRouter()
 
 const genBtn = useMagnet(5)
 const MAX_BATCH_COUNT = 8
+let presetAppliedFromQuery = false
 
 const modes: { id: GenerationMode; label: string; icon: string; helper: string }[] = [
   { id: 'text', label: '文生图', icon: 'auto_awesome', helper: '从提示词直接生成新画面' },
@@ -158,6 +160,15 @@ const batchProgressPct = computed(
 )
 
 onMounted(() => {
+  // Marketplace preset handoff runs through the immediate route watcher before
+  // mount; don't overwrite it with local defaults.
+  if (!presetAppliedFromQuery) {
+    const prefs = loadWorkspacePreferences()
+    mode.value = prefs.defaultMode
+    resolution.value = prefs.defaultResolution
+    aspect.value = prefs.defaultAspectRatio
+    style.value = prefs.defaultStyle
+  }
   // A return visit should start idle: don't re-show a previously finished image
   // (the store's `active` persists across route changes). An in-flight job keeps
   // polling — its store-owned timer survives navigation, so re-arm defensively.
@@ -435,6 +446,7 @@ function applyPresetFromQuery(rawPresetId: unknown) {
   }
 
   applyPreset(preset)
+  presetAppliedFromQuery = true
   presetHint.value = `已载入「${preset.title}」预设，参数可继续修改。`
   if (route.path === '/') {
     router.replace({ path: '/', query: {} })

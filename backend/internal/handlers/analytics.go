@@ -29,6 +29,7 @@ type AnalyticsDistributionItem struct {
 
 type AnalyticsRecentGeneration struct {
 	ID          string     `json:"id"`
+	Mode        string     `json:"mode"`
 	Prompt      string     `json:"prompt"`
 	Status      string     `json:"status"`
 	Resolution  string     `json:"resolution"`
@@ -184,6 +185,7 @@ func (h *Handler) Analytics(w http.ResponseWriter, r *http.Request) {
 	for _, gen := range recentGenerations {
 		recent = append(recent, AnalyticsRecentGeneration{
 			ID:          gen.ID,
+			Mode:        gen.Mode,
 			Prompt:      gen.Prompt,
 			Status:      gen.Status,
 			Resolution:  gen.Resolution,

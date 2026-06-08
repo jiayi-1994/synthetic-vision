@@ -20,6 +20,10 @@ const navItems: NavItem[] = [
   { to: '/analytics', label: '数据分析', icon: 'insights' },
 ]
 
+function goUpgrade() {
+  router.push('/settings?section=billing')
+}
+
 function logout() {
   auth.logout()
   router.push('/login')
@@ -84,25 +88,27 @@ function logout() {
 
     <div class="mt-auto flex flex-col gap-1.5 border-t border-outline-variant/20 pt-4">
       <button
+        type="button"
         class="relative w-full py-3 px-4 rounded-xl grad-border bg-surface-container font-display font-bold text-on-surface hover:text-primary hover:glow-shadow transition-all mb-1.5 flex items-center justify-center gap-2"
+        @click="goUpgrade"
       >
         <span class="material-symbols-outlined text-[18px] text-secondary">bolt</span>
         升级套餐
       </button>
-      <a
+      <RouterLink
+        to="/support"
         class="flex items-center gap-3 px-4 py-2.5 text-on-surface-variant font-display rounded-xl hover:bg-primary/5 hover:text-primary transition-all duration-200"
-        href="#"
       >
         <span class="material-symbols-outlined text-[22px]">help_outline</span>
         <span class="text-[15px]">帮助</span>
-      </a>
-      <a
+      </RouterLink>
+      <RouterLink
+        to="/settings"
         class="flex items-center gap-3 px-4 py-2.5 text-on-surface-variant font-display rounded-xl hover:bg-primary/5 hover:text-primary transition-all duration-200"
-        href="#"
       >
         <span class="material-symbols-outlined text-[22px]">settings</span>
         <span class="text-[15px]">设置</span>
-      </a>
+      </RouterLink>
       <button
         class="flex items-center gap-3 px-4 py-2.5 text-on-surface-variant font-display rounded-xl hover:bg-error/10 hover:text-error transition-all duration-200"
         @click="logout"

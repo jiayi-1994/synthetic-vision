@@ -36,7 +36,7 @@ export const COSTS: Record<Resolution, number> = {
   '4K': 40,
 }
 
-export const RESOLUTIONS: Resolution[] = ['1K', '2K']
+export const RESOLUTIONS: Resolution[] = ['1K', '2K', '4K']
 
 export const ASPECTS: { id: AspectRatio; label: string; w: number; h: number }[] = [
   { id: '1:1', label: '1:1 正方形', w: 8, h: 8 },

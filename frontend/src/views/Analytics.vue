@@ -66,6 +66,17 @@ function formatStatus(status: GenStatus) {
   }
 }
 
+function formatMode(mode?: string) {
+  switch (mode) {
+    case 'image':
+      return '图生图'
+    case 'edit':
+      return '局部修图'
+    default:
+      return '文生图'
+  }
+}
+
 function statusBadgeClass(status: GenStatus) {
   switch (status) {
     case 'completed':
@@ -260,6 +271,8 @@ onMounted(loadAnalytics)
                 <div class="space-y-1.5 flex-1">
                   <div class="flex items-center gap-2 flex-wrap font-mono text-[11px] text-on-surface-variant uppercase">
                     <span>{{ gen.created_at ? relativeTime(gen.created_at) : '时间未知' }}</span>
+                    <span class="w-1 h-1 bg-outline rounded-full"></span>
+                    <span class="text-tertiary">{{ formatMode(gen.mode) }}</span>
                     <span class="w-1 h-1 bg-outline rounded-full"></span>
                     <span>{{ gen.resolution }} / {{ gen.aspect_ratio }}</span>
                     <span class="w-1 h-1 bg-outline rounded-full"></span>

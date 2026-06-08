@@ -94,6 +94,7 @@ export interface AnalyticsCreditBreakdown {
 
 export interface AnalyticsRecentGeneration {
   id: string
+  mode: GenerationMode
   prompt: string
   status: GenStatus
   resolution: Resolution

@@ -26,10 +26,10 @@ func TestAnalyticsHandlerPersonalizedAggregation(t *testing.T) {
 	uidB := seedAnalyticsUser(t, h.DB, 80, "creator-b", "bob@example.com")
 
 	now := time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC)
-	seedAnalyticsGeneration(t, h.DB, uidA, "completed", now.Add(-3*time.Hour), "1K", "1:1", 5, "晨光林间")
-	seedAnalyticsGeneration(t, h.DB, uidA, "failed", now.Add(-2*time.Hour), "2K", "16:9", 15, "霓虹赛博")
-	seedAnalyticsGeneration(t, h.DB, uidA, "pending", now.Add(-1*time.Hour), "2K", "4:3", 15, "静物研究")
-	seedAnalyticsGeneration(t, h.DB, uidA, "processing", now.Add(-30*time.Minute), "1K", "9:16", 5, "草地")
+	seedAnalyticsGeneration(t, h.DB, uidA, "text", "completed", now.Add(-3*time.Hour), "1K", "1:1", 5, "晨光林间")
+	seedAnalyticsGeneration(t, h.DB, uidA, "image", "failed", now.Add(-2*time.Hour), "2K", "16:9", 15, "霓虹赛博")
+	seedAnalyticsGeneration(t, h.DB, uidA, "text", "pending", now.Add(-1*time.Hour), "2K", "4:3", 15, "静物研究")
+	seedAnalyticsGeneration(t, h.DB, uidA, "edit", "processing", now.Add(-30*time.Minute), "1K", "9:16", 5, "草地")
 
 	seedCreditTxn(t, h.DB, uidA, "generation", -5)
 	seedCreditTxn(t, h.DB, uidA, "generation", -15)
@@ -74,7 +74,7 @@ func TestAnalyticsHandlerPersonalizedAggregation(t *testing.T) {
 	if len(payload.AspectDistribution) != 4 {
 		t.Fatalf("aspect distribution mismatch: %+v", payload.AspectDistribution)
 	}
-	if payload.RecentGenerations[0].Prompt != "草地" || payload.RecentGenerations[0].Resolution != "1K" {
+	if payload.RecentGenerations[0].Prompt != "草地" || payload.RecentGenerations[0].Resolution != "1K" || payload.RecentGenerations[0].Mode != "edit" {
 		t.Fatalf("recent order should be newest-first: %+v", payload.RecentGenerations[:1])
 	}
 }
@@ -116,11 +116,11 @@ func TestAnalyticsHandlerUserIsolation(t *testing.T) {
 	uidA := seedAnalyticsUser(t, h.DB, 15, "owner", "owner@example.com")
 	uidB := seedAnalyticsUser(t, h.DB, 15, "intruder", "intruder@example.com")
 
-	seedAnalyticsGeneration(t, h.DB, uidA, "completed", time.Now(), "1K", "1:1", 5, "A1")
-	seedAnalyticsGeneration(t, h.DB, uidA, "completed", time.Now(), "1K", "4:3", 5, "A2")
+	seedAnalyticsGeneration(t, h.DB, uidA, "text", "completed", time.Now(), "1K", "1:1", 5, "A1")
+	seedAnalyticsGeneration(t, h.DB, uidA, "image", "completed", time.Now(), "1K", "4:3", 5, "A2")
 	seedCreditTxn(t, h.DB, uidA, "generation", -10)
 
-	seedAnalyticsGeneration(t, h.DB, uidB, "failed", time.Now(), "2K", "16:9", 15, "B1")
+	seedAnalyticsGeneration(t, h.DB, uidB, "text", "failed", time.Now(), "2K", "16:9", 15, "B1")
 	seedCreditTxn(t, h.DB, uidB, "generation", -15)
 
 	res := getAnalyticsResponse(t, h, uidA)
@@ -195,7 +195,7 @@ func seedAnalyticsUser(t *testing.T, gdb *gorm.DB, credits int, username, email 
 	return id
 }
 
-func seedAnalyticsGeneration(t *testing.T, gdb *gorm.DB, uid, status string, created time.Time, resolution, aspect string, cost int, prompt string) {
+func seedAnalyticsGeneration(t *testing.T, gdb *gorm.DB, uid, mode, status string, created time.Time, resolution, aspect string, cost int, prompt string) {
 	t.Helper()
 	id := uuid.NewString()
 	now := created
@@ -225,6 +225,7 @@ func seedAnalyticsGeneration(t *testing.T, gdb *gorm.DB, uid, status string, cre
 	gen := &models.Generation{
 		ID:             id,
 		UserID:         uid,
+		Mode:           mode,
 		Prompt:         prompt,
 		Resolution:     resolution,
 		AspectRatio:    aspect,
